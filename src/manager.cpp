@@ -53,7 +53,7 @@ sdbusplus::async::task<> Manager::parseConfiguration()
                     configJSON["Files"],
                     std::back_inserter(this->_dataSyncConfiguration),
                     [](const auto& element) {
-                    return config::DataSyncConfig(element);
+                    return config::DataSyncConfig(element, false);
                 });
             }
             if (configJSON.contains("Directories"))
@@ -62,7 +62,7 @@ sdbusplus::async::task<> Manager::parseConfiguration()
                     configJSON["Directories"],
                     std::back_inserter(this->_dataSyncConfiguration),
                     [](const auto& element) {
-                    return config::DataSyncConfig(element);
+                    return config::DataSyncConfig(element, true);
                 });
             }
         }
