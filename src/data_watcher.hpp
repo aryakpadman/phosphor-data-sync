@@ -178,6 +178,53 @@ class DataWatcher
      *                 false - Sync not required for the data
      */
     bool processReceivedEvents(eventInfo receivedEventInfo);
+
+    /**
+     * @brief API to handle the received IN_CLOSE_WRITE inotify events
+     *
+     * @param[in] receivedEventInfo : Tuple of name and mask values of
+     *                                inotify_event structure.
+     * @returns bool : true - Required to the sync the data
+     *                 false - Sync not required for the data
+     */
+    bool processCloseWrite(eventInfo receivedEventInfo);
+
+    /**
+     * @brief API to handle the received IN_CREATE inotify events
+     *
+     * @param[in] receivedEventInfo : Tuple of name and mask values of
+     *                                inotify_event structure.
+     * @returns bool : true - Required to the sync the data
+     *                 false - Sync not required for the data
+     */
+    bool processCreate(eventInfo receivedEventInfo);
+
+    /**
+     * @brief API to handle the received IN_DELETE inotify events
+     *
+     * @param[in] receivedEventInfo : Tuple of name and mask values of
+     *                                inotify_event structure.
+     * @returns bool : true - Required to the sync the data
+     *                 false - Sync not required for the data
+     */
+    bool processDelete(eventInfo receivedEventInfo);
+
+    /**
+     * @brief API to handle the received IN_DELETE_SELF inotify events
+     *
+     * @param[in] receivedEventInfo : Tuple of name and mask values of
+     *                                inotify_event structure.
+     * @returns bool : true - Required to the sync the data
+     *                 false - Sync not required for the data
+     */
+    bool processDeleteSelf(eventInfo receivedEventInfo);
+
+    /** @brief API to remove the watch for a path and to
+     *  remove from the map of watch descriptors.
+     *
+     *  @param[in] wd - Watch descriptor corresponding to the path
+     */
+    void removeWatch(int wd);
 };
 
 } // namespace watch::inotify
