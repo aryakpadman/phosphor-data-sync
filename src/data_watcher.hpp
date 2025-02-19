@@ -26,6 +26,17 @@ namespace fs = std::filesystem;
  */
 using eventInfo = std::tuple<int, std::string, uint32_t>;
 
+/**
+ * @brief enum which indicates the type of action required against a
+ * received inotify event
+ */
+enum class RequiredAction
+{
+    SYNC,
+    DELETE,
+    SKIP
+};
+
 /** @class FD
  *
  *  @brief RAII wrapper for file descriptor.
@@ -101,7 +112,7 @@ class DataWatcher
     /**
      * @brief API to monitor for the file/directory for inotify events
      */
-    sdbusplus::async::task<bool> onDataChange();
+    sdbusplus::async::task<RequiredAction> onDataChange();
 
     static void printWD(const std::map<int, fs::path>& _watchDescriptors);
 
@@ -141,7 +152,17 @@ class DataWatcher
      */
     int inotifyInit() const;
 
-    /* @brief Create watcher for the given data path and add to the list of
+    /**
+     * @brief API to get the existing parent path of a given path.
+     *
+     * @param[in] dataPath - The path to check
+
+     * @returns std::filesystem::path - existing parent path
+     */
+    static fs::path getExistingParentPath(const fs::path& dataPath);
+
+    /**
+     * @brief Create watcher for the given data path and add to the list of
      * watch descriptors.
      *
      * @param[in] dataPathToWatch - The path of file/directory to be monitored
@@ -151,7 +172,8 @@ class DataWatcher
     void addToWatchList(const fs::path& currentPathToWatch,
                         uint32_t eventMasksToWatch);
 
-    /** @brief API to check the given path andd watchers for the path and
+    /**
+     * @brief API to check the given path andd watchers for the path and
      * subdirectories too if any.
      *
      * @param[in] currentPathToWatch - The path of file/directory to be
@@ -177,7 +199,7 @@ class DataWatcher
      * @returns bool : true - Required to the sync the data
      *                 false - Sync not required for the data
      */
-    bool processReceivedEvents(eventInfo receivedEventInfo);
+    RequiredAction processReceivedEvents(eventInfo receivedEventInfo);
 
     /**
      * @brief API to handle the received IN_CLOSE_WRITE inotify events
@@ -187,7 +209,7 @@ class DataWatcher
      * @returns bool : true - Required to the sync the data
      *                 false - Sync not required for the data
      */
-    bool processCloseWrite(eventInfo receivedEventInfo);
+    RequiredAction processCloseWrite(eventInfo receivedEventInfo);
 
     /**
      * @brief API to handle the received IN_CREATE inotify events
@@ -197,7 +219,7 @@ class DataWatcher
      * @returns bool : true - Required to the sync the data
      *                 false - Sync not required for the data
      */
-    bool processCreate(eventInfo receivedEventInfo);
+    RequiredAction processCreate(eventInfo receivedEventInfo);
 
     /**
      * @brief API to handle the received IN_DELETE inotify events
@@ -207,7 +229,7 @@ class DataWatcher
      * @returns bool : true - Required to the sync the data
      *                 false - Sync not required for the data
      */
-    bool processDelete(eventInfo receivedEventInfo);
+    RequiredAction processDelete(eventInfo receivedEventInfo);
 
     /**
      * @brief API to handle the received IN_DELETE_SELF inotify events
@@ -217,7 +239,7 @@ class DataWatcher
      * @returns bool : true - Required to the sync the data
      *                 false - Sync not required for the data
      */
-    bool processDeleteSelf(eventInfo receivedEventInfo);
+    RequiredAction processDeleteSelf(eventInfo receivedEventInfo);
 
     /** @brief API to remove the watch for a path and to
      *  remove from the map of watch descriptors.

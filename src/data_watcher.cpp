@@ -5,6 +5,7 @@
 #include <phosphor-logging/lg2.hpp>
 
 #include <string>
+#include <unordered_set>
 
 namespace data_sync
 {
@@ -72,6 +73,16 @@ int DataWatcher::inotifyInit() const
     return fd;
 }
 
+fs::path DataWatcher::getExistingParentPath(const fs::path& dataPath)
+{
+    fs::path parentPath = dataPath.parent_path();
+    while (!fs::exists(parentPath))
+    {
+        parentPath = parentPath.parent_path();
+    }
+    return parentPath;
+}
+
 void DataWatcher::addToWatchList(const fs::path& currentPathToWatch,
                                  uint32_t eventMasksToWatch)
 {
@@ -96,6 +107,7 @@ void DataWatcher::addToWatchList(const fs::path& currentPathToWatch,
         _watchDescriptors.insert({wd, currentPathToWatch});
         printWD(_watchDescriptors);
     }
+    lg2::info("Started monitoring {PATH}", "PATH", currentPathToWatch);
 }
 
 void DataWatcher::createWatchers(const fs::path& currentPathToWatch,
@@ -128,14 +140,6 @@ void DataWatcher::createWatchers(const fs::path& currentPathToWatch,
         lg2::info("Given path [{PATH}] doesn't exist to watch", "PATH",
                   currentPathToWatch);
 
-        auto getExistingParentPath = [&](fs::path dataPath) {
-            while (!fs::exists(dataPath))
-            {
-                dataPath = dataPath.parent_path();
-            }
-            return dataPath;
-        };
-
         if ((eventMasksToWatch & IN_CREATE) == 0)
         {
             eventMasksToWatch |= IN_CREATE;
@@ -146,7 +150,7 @@ void DataWatcher::createWatchers(const fs::path& currentPathToWatch,
 }
 
 // NOLINTNEXTLINE
-sdbusplus::async::task<bool> DataWatcher::onDataChange()
+sdbusplus::async::task<RequiredAction> DataWatcher::onDataChange()
 {
     // NOLINTNEXTLINE
     co_await _fdioInstance->next();
@@ -155,18 +159,23 @@ sdbusplus::async::task<bool> DataWatcher::onDataChange()
 
     if (receivedEvents.has_value())
     {
-        std::vector<bool> isSyncRequire{true};
+        std::unordered_set<RequiredAction> actionRequested{};
         std::ranges::for_each(
             receivedEvents.value(),
-            [this, &isSyncRequire](const auto& receivedEventInfo) {
-            isSyncRequire.emplace_back(
-                processReceivedEvents(receivedEventInfo));
+            [this, &actionRequested](const auto& receivedEventInfo) {
+            auto requiredAction = processReceivedEvents(receivedEventInfo);
+            if (requiredAction != RequiredAction::SKIP)
+            {
+                actionRequested.emplace(requiredAction);
+            }
         });
 
-        co_return std::ranges::any_of(isSyncRequire,
-                                      [](bool item) { return item; });
+        if (actionRequested.size() == 1)
+        {
+            co_return *std::begin(actionRequested);
+        }
     }
-    co_return false;
+    co_return RequiredAction::SYNC;
 }
 
 std::optional<std::vector<eventInfo>> DataWatcher::readEvents()
@@ -193,14 +202,14 @@ std::optional<std::vector<eventInfo>> DataWatcher::readEvents()
         receivedEvents.emplace_back(receivedEvent->wd, receivedEvent->name,
                                     receivedEvent->mask);
 
-        lg2::debug("Received inotify event with mask : {MASK}", "MASK",
-                   receivedEvent->mask);
+        lg2::debug("Received an inotify event for wd : {WD} with mask : {MASK}",
+                   "MASK", receivedEvent->mask, "WD", receivedEvent->wd);
         offset += offsetof(inotify_event, name) + receivedEvent->len;
     }
     return receivedEvents;
 }
 
-bool DataWatcher::processReceivedEvents(eventInfo receivedEventInfo)
+RequiredAction DataWatcher::processReceivedEvents(eventInfo receivedEventInfo)
 {
     if ((std::get<2>(receivedEventInfo) & IN_CLOSE_WRITE) != 0)
     {
@@ -215,10 +224,18 @@ bool DataWatcher::processReceivedEvents(eventInfo receivedEventInfo)
          */
         return processCreate(receivedEventInfo);
     }
-    return false;
+    else if ((std::get<2>(receivedEventInfo) & IN_DELETE_SELF) != 0)
+    {
+        return processDeleteSelf(receivedEventInfo);
+    }
+    else if ((std::get<2>(receivedEventInfo) & IN_DELETE) != 0)
+    {
+        return processDelete(receivedEventInfo);
+    }
+    return RequiredAction::SKIP;
 }
 
-bool DataWatcher::processCloseWrite(eventInfo receivedEventInfo)
+RequiredAction DataWatcher::processCloseWrite(eventInfo receivedEventInfo)
 {
     // Case 1 : Files listed in the config and are already existing
     if (_watchDescriptors.at(std::get<0>(receivedEventInfo)) ==
@@ -226,7 +243,7 @@ bool DataWatcher::processCloseWrite(eventInfo receivedEventInfo)
     {
         lg2::info("Syncing {DATA} for IN_CLOSE_WRITE", "DATA",
                   _dataPathToWatch);
-        return true;
+        return RequiredAction::SYNC;
     }
     // Case 2 : Files created while monitoring parent dir as file not
     // exists.
@@ -236,12 +253,13 @@ bool DataWatcher::processCloseWrite(eventInfo receivedEventInfo)
     {
         addToWatchList(_dataPathToWatch, _eventMasksToWatch);
         removeWatch(std::get<0>(receivedEventInfo));
-        return true;
+        return RequiredAction::SYNC;
     }
-    return false;
+
+    return RequiredAction::SKIP;
 }
 
-bool DataWatcher::processCreate(eventInfo receivedEventInfo)
+RequiredAction DataWatcher::processCreate(eventInfo receivedEventInfo)
 {
     // TODO : Add if check whether the IN_CREATE received for dir IN_ISDIR
 
@@ -271,7 +289,6 @@ bool DataWatcher::processCreate(eventInfo receivedEventInfo)
                     {
                         removeWatch(parentWd->first);
                     }
-
                     return true;
                 }
                 else if (fs::is_directory(entry) &&
@@ -290,9 +307,9 @@ bool DataWatcher::processCreate(eventInfo receivedEventInfo)
             std::ranges::for_each(
                 fs::recursive_directory_iterator(monitoringPath),
                 modifyWatchIfExpected);
-            return true;
+            return RequiredAction::SYNC;
         }
-        return false;
+        return RequiredAction::SKIP;
     }
     // Case 2: While Monitoring the directory as per the JSON config.
     // Case 3: When sub directory got created inside watching directory
@@ -310,9 +327,55 @@ bool DataWatcher::processCreate(eventInfo receivedEventInfo)
         {
             createWatchers(createdPath, _eventMasksToWatch);
         }
-        return true;
+        return RequiredAction::SYNC;
     }
-    return false;
+    return RequiredAction::SKIP;
+}
+
+RequiredAction DataWatcher::processDeleteSelf(eventInfo receivedEventInfo)
+{
+    // Case 1 : A monitoring file got deleted.
+    // case 2 : A monitoring directory got deleted.
+    lg2::debug("Received IN_DELETE_SELF from {PATH} , eventmask : {MASK}",
+               "PATH", _watchDescriptors.at(std::get<0>(receivedEventInfo)),
+               "MASK", std::get<2>(receivedEventInfo));
+
+    fs::path deletedPath = _watchDescriptors.at(std::get<0>(receivedEventInfo));
+
+    if (_watchDescriptors.size() == 1)
+    {
+        // Since no more watches will be there, add a watch on parent dir to
+        // notify future create events.
+        addToWatchList(getExistingParentPath(deletedPath), _eventMasksToWatch);
+    }
+
+    auto removeWatchIfChild = [this, &deletedPath](const auto& wd) {
+        if (wd.second.string().starts_with(deletedPath.string()) &&
+            (wd.second != deletedPath))
+        {
+            removeWatch(wd.first);
+        }
+    };
+    std::ranges::for_each(_watchDescriptors, removeWatchIfChild);
+
+    // Remove watch for deleted DIR also
+    removeWatch(std::get<0>(receivedEventInfo));
+
+    return RequiredAction::DELETE;
+}
+
+RequiredAction DataWatcher::processDelete(eventInfo receivedEventInfo)
+{
+    lg2::debug("Received IN_DELETE from {PATH} , eventmask : {MASK}", "PATH",
+               _watchDescriptors.at(std::get<0>(receivedEventInfo)), "MASK",
+               std::get<2>(receivedEventInfo));
+    if ((std::get<2>(receivedEventInfo) & IN_ISDIR) == 0)
+    {
+        // Case 1 : A file inside watching directory got deleted
+        return RequiredAction::DELETE;
+    }
+
+    return RequiredAction::SKIP;
 }
 
 void DataWatcher::removeWatch(int wd)
@@ -327,6 +390,7 @@ void DataWatcher::removeWatch(int wd)
     {
         lg2::error("Failed to remove the watch for {PATH}", "PATH", dataPath);
     }
+
     lg2::info("Stopped monitoring {PATH}", "PATH", dataPath);
     printWD(_watchDescriptors);
 }

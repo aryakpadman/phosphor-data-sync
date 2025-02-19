@@ -176,7 +176,8 @@ sdbusplus::async::task<>
 {
     try
     {
-        uint32_t eventMasksToWatch = IN_CLOSE_WRITE;
+        uint32_t eventMasksToWatch = IN_CLOSE_WRITE | IN_DELETE |
+                                     IN_DELETE_SELF;
         if (dataSyncCfg._isPathDir)
         {
             eventMasksToWatch |= IN_CREATE;
@@ -188,9 +189,22 @@ sdbusplus::async::task<>
 
         while (!_ctx.stop_requested())
         {
-            if (co_await dataWatcher.onDataChange())
+            switch (co_await dataWatcher.onDataChange())
             {
-                syncData(dataSyncCfg);
+                case RequiredAction::SYNC:
+                {
+                    syncData(dataSyncCfg);
+                    break;
+                }
+                case RequiredAction::DELETE:
+                {
+                    syncData(dataSyncCfg, true);
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
             }
         }
     }
