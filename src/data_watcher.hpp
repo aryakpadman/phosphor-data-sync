@@ -8,6 +8,7 @@
 #include <sdbusplus/async.hpp>
 
 #include <filesystem>
+#include <map>
 
 namespace data_sync
 {
@@ -19,10 +20,11 @@ namespace fs = std::filesystem;
 /**
  * @brief A tuple which has the info related to the occured inotify event
  *
+ * int         - Watch descriptor corresponds to the event
  * std::string - name[] in inotify_event struct
  * uint32_t    - Mask describing event
  */
-using eventInfo = std::tuple<std::string, uint32_t>;
+using eventInfo = std::tuple<int, std::string, uint32_t>;
 
 /** @class FD
  *
@@ -101,6 +103,8 @@ class DataWatcher
      */
     sdbusplus::async::task<bool> onDataChange();
 
+    static void printWD(const std::map<int, fs::path>& _watchDescriptors);
+
   private:
     /**
      * @brief inotify flags
@@ -117,10 +121,10 @@ class DataWatcher
      */
     std::filesystem::path _dataPathToWatch;
 
-    /**
-     * @brief The unique watch descriptor for the inotify instance
+    /** @brief The map of unique watch descriptors associated with an inotify
+     * instance
      */
-    int _watchDescriptor{-1};
+    std::map<int, fs::path> _watchDescriptors;
 
     /**
      * @brief file descriptor referring to the inotify instance
@@ -137,10 +141,26 @@ class DataWatcher
      */
     int inotifyInit() const;
 
-    /**
-     * @brief Create an inotify watch for the data to be monitored
+    /* @brief Create watcher for the given data path and add to the list of
+     * watch descriptors.
+     *
+     * @param[in] dataPathToWatch - The path of file/directory to be monitored
+     * @param[in] eventMasksToWatch - The set of events for which the path to be
+     *                                monitored
      */
-    int addToWatchList();
+    void addToWatchList(const fs::path& currentPathToWatch,
+                        uint32_t eventMasksToWatch);
+
+    /** @brief API to check the given path andd watchers for the path and
+     * subdirectories too if any.
+     *
+     * @param[in] currentPathToWatch - The path of file/directory to be
+     * monitored
+     * @param[in] eventMasksToWatch - The set of events for which the path to be
+     *                                monitored
+     */
+    void createWatchers(const std::filesystem::path& currentPathToWatch,
+                        uint32_t eventMasksToWatch);
 
     /**
      * @brief API to read the triggered events from inotify structure
