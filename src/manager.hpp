@@ -84,9 +84,11 @@ class Manager
      *        performing a local copy instead.
      *
      * @param[in] dataSyncCfg - The data sync config to sync
-     *
+     * @param[in] isDelete - true - Data need to be deleted on other side.
+     *                       false - Data need to be copied to other side.
      */
-    static void syncData(const config::DataSyncConfig& dataSyncCfg);
+    static void syncData(const config::DataSyncConfig& dataSyncCfg,
+                         bool isDelete = false);
 
     /**
      * @brief A helper to API to monitor data to sync if its changed

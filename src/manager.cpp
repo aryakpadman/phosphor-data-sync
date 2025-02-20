@@ -130,11 +130,27 @@ sdbusplus::async::task<> Manager::startSyncEvents()
     co_return;
 }
 
-void Manager::syncData(const config::DataSyncConfig& dataSyncCfg)
+void Manager::syncData(const config::DataSyncConfig& dataSyncCfg, bool isDelete)
 {
     using namespace std::string_literals;
+
+    std::filesystem::path srcPath{dataSyncCfg._path};
+    std::filesystem::path destPath{
+        dataSyncCfg._destPath.value_or(dataSyncCfg._path)};
     std::string syncCmd{"rsync --archive --compress"};
-    syncCmd.append(" "s + dataSyncCfg._path);
+
+    if (isDelete)
+    {
+        std::string syncCmd{"rsync --delete --archive --compress"};
+        if (!std::filesystem::exists(srcPath))
+        {
+            srcPath = srcPath.parent_path();
+            destPath = destPath.parent_path();
+        }
+    }
+
+    // Add source data path
+    syncCmd.append(" "s + srcPath.string());
 
 #ifdef UNIT_TEST
     syncCmd.append(" "s);
@@ -143,7 +159,8 @@ void Manager::syncData(const config::DataSyncConfig& dataSyncCfg)
 #endif
 
     // Add destination data path
-    syncCmd.append(dataSyncCfg._destPath.value_or(dataSyncCfg._path));
+    syncCmd.append(destPath.string());
+
     int result = std::system(syncCmd.c_str()); // NOLINT
     if (result != 0)
     {
