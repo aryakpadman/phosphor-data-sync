@@ -2,6 +2,8 @@
 
 #include "manager.hpp"
 
+#include "data_watcher.hpp"
+
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
 
@@ -15,6 +17,7 @@
 namespace data_sync
 {
 
+using namespace watch::inotify;
 Manager::Manager(sdbusplus::async::context& ctx,
                  std::unique_ptr<ext_data::ExternalDataIFaces>&& extDataIfaces,
                  const fs::path& dataSyncCfgDir) :
@@ -150,11 +153,30 @@ void Manager::syncData(const config::DataSyncConfig& dataSyncCfg)
     }
 }
 
-// NOLINTNEXTLINE
-sdbusplus::async::task<> Manager::monitorDataToSync(
-    [[maybe_unused]] const config::DataSyncConfig& dataSyncCfg)
+sdbusplus::async::task<>
+    // NOLINTNEXTLINE
+    Manager::monitorDataToSync(const config::DataSyncConfig& dataSyncCfg)
 {
-    // TODO Create inotify events to monitor data for sync
+    try
+    {
+        // Create watcher for the dataSyncCfg._path
+        watch::inotify::DataWatcher dataWatcher(
+            _ctx, IN_NONBLOCK, IN_CLOSE_WRITE, dataSyncCfg._path);
+
+        while (!_ctx.stop_requested())
+        {
+            if (co_await dataWatcher.onDataChange())
+            {
+                syncData(dataSyncCfg);
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        lg2::error("Failed to create watcher object for {PATH} :  exception "
+                   "{ERROR}",
+                   "PATH", dataSyncCfg._path, "ERROR", e.what());
+    }
     co_return;
 }
 
