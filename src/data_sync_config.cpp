@@ -24,6 +24,18 @@ bool Retry::operator==(const Retry& retry) const
            _retryIntervalInSec == retry._retryIntervalInSec;
 }
 
+NotifySiblingConfig::NotifySiblingConfig(const nlohmann::json& notifySibling)
+{
+    if (notifySibling.contains("NotifyOnPaths"))
+    {
+        _paths = notifySibling["NotifyOnPaths"].get<NotifyOnPaths>();
+    }
+    _notifyReqInfo = notifySibling;
+    // Dropping NotifyOnPaths and storing explicitly as notification requests
+    // doesn't need the info.
+    _notifyReqInfo.erase("NotifyOnPaths");
+}
+
 DataSyncConfig::DataSyncConfig(const nlohmann::json& config,
                                const bool isPathDir) :
     _path(config["Path"].get<std::string>()), _isPathDir(isPathDir),
@@ -58,6 +70,11 @@ DataSyncConfig::DataSyncConfig(const nlohmann::json& config,
     else
     {
         _periodicityInSec = std::nullopt;
+    }
+
+    if (config.contains("NotifySibling"))
+    {
+        _notifySibling = NotifySiblingConfig(config["NotifySibling"]);
     }
 
     if (config.contains("RetryAttempts") && config.contains("RetryInterval"))
