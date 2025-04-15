@@ -170,6 +170,15 @@ class Manager
         syncData(const config::DataSyncConfig& dataSyncCfg);
 
     /**
+     * @brief API to frame the RSYNC CLI command
+     *
+     * @param[in] operation - 0 : Copy/delete operation via rsync
+     *                      - 1 : Notify sibling via rsync
+     */
+    void getRsyncCmd(const std::string& src, const std::string& dest, std::string& cmd,
+                        bool operation);
+
+    /**
      * @brief A helper to API to monitor data to sync if its changed
      *
      * @param[in] dataSyncCfg - The data sync config to sync
