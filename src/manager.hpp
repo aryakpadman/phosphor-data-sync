@@ -21,6 +21,12 @@ using SyncEventsHealth = sdbusplus::common::xyz::openbmc_project::control::
 
 namespace fs = std::filesystem;
 
+enum class RsyncMode
+{
+    Sync,  // perform sync
+    Notify // perform sibling notification
+};
+
 /**
  * @class Manager
  *
@@ -157,6 +163,24 @@ class Manager
      *          synchronization.
      */
     sdbusplus::async::task<> startSyncEvents();
+
+    /**
+     *
+     */
+    sdbusplus::async::task<std::pair<int, std::string>>
+        triggerSiblingNotification(const config::DataSyncConfig& dataSyncCfg,
+                                   const std::string& srcPath);
+
+    /**
+     * @brief API to frame the RSYNC CLI command
+     *
+     * @param[in] mode - enum RsyncMode : sync or notify
+     * @param[in] dataSyncCfg - The data sync config to sync
+     * @param[out] cmd - string where the framed RSYNC command holds.
+     */
+    static void getRsyncCmd(RsyncMode mode,
+                            const config::DataSyncConfig& dataSyncCfg,
+                            const std::string& srcPath, std::string& cmd);
 
     /**
      * @brief A helper rsync wrapper API that syncs data to sibling
