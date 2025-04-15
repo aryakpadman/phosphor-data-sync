@@ -6,6 +6,7 @@
 
 #include "data_watcher.hpp"
 #include "notify_sibling.hpp"
+#include "notify_service.hpp"
 
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
@@ -41,6 +42,8 @@ sdbusplus::async::task<> Manager::init()
             "Sync is Disabled, data sync cannot be performed to the sibling BMC.");
         co_return;
     }
+
+    _ctx.spawn(monitorServiceNotifications());
 
     // TODO: Explore the possibility of running FullSync and Background Sync
     // concurrently
@@ -96,6 +99,50 @@ sdbusplus::async::task<> Manager::parseConfiguration()
         std::ranges::for_each(fs::directory_iterator(_dataSyncCfgDir), parse);
     }
 
+    co_return;
+}
+
+// NOLINTNEXTLINE
+sdbusplus::async::task<> Manager::monitorServiceNotifications()
+{
+    lg2::debug("Monitor for sibling notifications");
+
+    try
+    {
+        // TODO : Process the unprocessed notify requests
+
+        //Start watching the NOTIFY_SERVICE_DIR
+        watch::inotify::DataWatcher notifyWatcher(_ctx, IN_NONBLOCK,
+                        IN_CLOSE_WRITE | IN_MOVED_TO, NOTIFY_SERVICE_DIR);
+
+        while (!_ctx.stop_requested() && !_syncBMCDataIface.disable_sync())
+        {
+            if (auto dataOperations = co_await notifyWatcher.onDataChange();
+                !dataOperations.empty())
+            {
+                // Below is temporary check to avoid sync when disable sync is
+                // set to true.
+                // TODO: add receiver logic to stop sync events when disable
+                // sync is set to true.
+                if (_syncBMCDataIface.disable_sync())
+                {
+                    break;
+                }
+                for (const auto& [path, Op] : dataOperations)
+                {
+                    lg2::info("Invoking notify service as {PATH} created",
+                                "PATH", path);
+                    notify::NotifyService notifyService(_ctx, path);
+                }
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        // TODO : Create error log if fails to create watcher.
+        lg2::error("Failed to create watcher for NOTIFY DIR. Exception : "
+                "{EXCEP}", "EXCEP", e.what());
+    }
     co_return;
 }
 
