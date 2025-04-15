@@ -17,6 +17,12 @@ project(
 data_sync_config_dir = get_option('datadir') + '/phosphor-data-sync/config/data_sync_list/'
 
 
+# Directory used to store files containing sibling notification requests.
+notify_sibling = get_option('localstatedir') + '/lib/phosphor-data-sync/notify-sibling/'
+
+#create the directory
+install_emptydir(notify_sibling, install_mode: 'rw-r--r--')
+
 foreach json_file_name : get_option('data_sync_list')
 
     #check whether the json file given in the list exist and if so, install the same
@@ -35,6 +41,11 @@ conf_data.set_quoted(
     'DATA_SYNC_CONFIG_DIR',
     '/usr/' + data_sync_config_dir,
     description: 'Path where the JSON config files resides',
+)
+conf_data.set_quoted(
+    'NOTIFY_SIBLING_DIR',
+    notify_sibling,
+    description: 'Directory where sibling notify requests get created',
 )
 conf_data.set(
     'DEFAULT_RETRY_ATTEMPTS',
