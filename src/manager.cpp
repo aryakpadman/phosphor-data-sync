@@ -5,6 +5,7 @@
 #include "manager.hpp"
 
 #include "data_watcher.hpp"
+#include "notify_sibling.hpp"
 
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
@@ -145,6 +146,38 @@ sdbusplus::async::task<> Manager::startSyncEvents()
     co_return;
 }
 
+void Manager::getRsyncCmd(const std::string& src, const std::string& dest, std::string&
+                    cmd, bool operation)
+{
+    using namespace std::string_literals;
+    if (!operation)
+    {
+        // Appending required flags to sync data between BMCs
+        cmd.append("rsync --archive --compress --delete --delete-missing-args"s);
+    }
+    else
+    {
+        // Appending the required flags to notify the siblng
+        cmd.append("rsync --compress --remove-source-files"s);
+    }
+
+    cmd.append(" "s + src);
+
+#ifdef UNIT_TEST
+    cmd.append(" "s);
+#else
+    cmd.append(" rsync://localhost:"s);
+    static const auto* siblingBMCRsyncdPort =
+        _extDataIfaces->siblingBmcPos() == 0 ? BMC0_RSYNC_PORT
+                                             : BMC1_RSYNC_PORT;
+    cmd.append(siblingBMCRsyncdPort);
+#endif
+
+    // Append dest path.
+    cmd.append(dest);
+
+}
+
 // TODO: This isn't truly an async operation — Need to use popen/posix_spawn to
 // run the rsync command asynchronously but it will be handled as part of
 // concurrent sync changes.
@@ -152,23 +185,9 @@ sdbusplus::async::task<bool>
     // NOLINTNEXTLINE
     Manager::syncData(const config::DataSyncConfig& dataSyncCfg)
 {
-    using namespace std::string_literals;
-    std::string syncCmd{
-        "rsync --archive --compress --delete --delete-missing-args"};
-    syncCmd.append(" "s + dataSyncCfg._path);
-
-#ifdef UNIT_TEST
-    syncCmd.append(" "s);
-#else
-    syncCmd.append(" rsync://localhost:"s);
-    static const auto* siblingBMCRsyncdPort =
-        _extDataIfaces->siblingBmcPos() == 0 ? BMC0_RSYNC_PORT
-                                             : BMC1_RSYNC_PORT;
-    syncCmd.append(siblingBMCRsyncdPort);
-#endif
-
-    // Add destination data path
-    syncCmd.append(dataSyncCfg._destPath.value_or(dataSyncCfg._path));
+    std::string syncCmd{};
+    getRsyncCmd(dataSyncCfg._path,
+        dataSyncCfg._destPath.value_or(dataSyncCfg._path), syncCmd, 0);
 
     lg2::debug("Rsync command: {CMD}", "CMD", syncCmd);
     int result = std::system(syncCmd.c_str()); // NOLINT
@@ -182,6 +201,22 @@ sdbusplus::async::task<bool>
         lg2::error("Error syncing: {PATH}", "PATH", dataSyncCfg._path);
 
         co_return false;
+    }
+    else if(dataSyncCfg._notifySibling.has_value())
+    {
+        // TODO: can't rely only on exit code. change to popen and read stdout
+        // also to confirm whether data got really updated.
+        lg2::info("Triggers Sibling Notification");
+
+        // Second argument is modified file path.
+        notify::NotifySibling notifySibling(dataSyncCfg, dataSyncCfg._path);
+
+        std::string notifyCmd{};
+        getRsyncCmd(notifySibling.getNotifyFilePath().string(),
+                        NOTIFY_SERVICE_DIR, notifyCmd, 1);
+        lg2::debug("Rsync notify cmd : {CMD}", "CMD", notifyCmd);
+
+        [[maybe_unused]] int notifyResult = std::system(notifyCmd.c_str());
     }
     co_return true;
 }
