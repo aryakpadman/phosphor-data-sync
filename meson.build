@@ -16,7 +16,6 @@ project(
 
 data_sync_config_dir = get_option('datadir') + '/phosphor-data-sync/config/data_sync_list/'
 
-
 # Directory used to store files containing sibling notification requests.
 if get_option('tests').enabled()
     notify_sibling = '/tmp/phosphor-data-sync/notify-sibling-test/'
@@ -54,6 +53,11 @@ conf_data.set_quoted(
     'NOTIFY_SERVICES_DIR',
     notify_services,
     description: 'Directory which receives the notify requests from sibling BMC',
+)
+conf_data.set_quoted(
+    'NOTIFY_SERVICE_DIR',
+    notify_services,
+    description : 'Directory which receives the notify requests from sibling BMC',
 )
 conf_data.set(
     'DEFAULT_RETRY_ATTEMPTS',
