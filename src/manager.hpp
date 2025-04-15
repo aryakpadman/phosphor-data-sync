@@ -156,6 +156,13 @@ class Manager
      */
     sdbusplus::async::task<> parseConfiguration();
 
+     /**
+      * @brief API which will monitor the notify directory for sibling
+      * notification requests, and will trigger the callback upon receiving the
+      * same.
+      */
+      sdbusplus::async::task<> monitorServiceNotifications();
+
     /**
      * @brief A helper API to initiate sync events, covering the following
      *        scenarios. These event will be initiated based on the BMC role.
