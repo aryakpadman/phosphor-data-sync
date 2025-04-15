@@ -20,10 +20,15 @@ bmc1_rsync_port = '1704'
 
 #Directory to store the sibling notification info files
 notify_sibling = get_option('localstatedir') + '/lib/phosphor-data-sync/notify-sibling/'
+notify_services = get_option('localstatedir') + '/lib/phosphor-data-sync/notify-services/'
 
 #create the directory
 install_emptydir(
     notify_sibling,
+    install_mode: 'rw-r--r--'
+)
+install_emptydir(
+    notify_services,
     install_mode: 'rw-r--r--'
 )
 
@@ -50,6 +55,11 @@ conf_data.set_quoted(
     'NOTIFY_SIBLING_DIR',
     notify_sibling,
     description : 'Directory where sibling notify info files get created',
+)
+conf_data.set_quoted(
+    'NOTIFY_SERVICE_DIR',
+    notify_services,
+    description : 'Directory which receives the notify requests from sibling BMC',
 )
 conf_data.set(
     'DEFAULT_RETRY_ATTEMPTS',
