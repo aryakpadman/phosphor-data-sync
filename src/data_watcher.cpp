@@ -155,6 +155,12 @@ std::optional<std::vector<EventInfo>> DataWatcher::readEvents()
         // NOLINTNEXTLINE to avoid cppcoreguidelines-pro-type-reinterpret-cast
         auto* receivedEvent = reinterpret_cast<inotify_event*>(&buffer[offset]);
 
+        lg2::debug("receivedEvent->name : {NAME}", "NAME", receivedEvent->name);
+        lg2::debug("receivedEvent->mask : {MASK}", "MASK", receivedEvent->mask);
+        /*if (receivedEvent->name[0] == '.')
+        {
+            return std::nullopt;
+        }*/
         receivedEvents.emplace_back(receivedEvent->wd, receivedEvent->name,
                                     receivedEvent->mask);
 
@@ -190,6 +196,10 @@ std::optional<DataOperation>
          * Handle the creation of directories inside a monitoring DIR
          */
         return processCreate(receivedEventInfo);
+    }
+    else if ((std::get<EventMask>(receivedEventInfo) & IN_MOVED_TO) != 0)
+    {
+        return processMovedTo(receivedEventInfo);
     }
     else if ((std::get<EventMask>(receivedEventInfo) & IN_DELETE_SELF) != 0)
     {
@@ -325,6 +335,24 @@ std::optional<DataOperation>
                 modifyWatchIfExpected);
             return std::make_pair(absCreatedPath, DataOps::COPY);
         }
+    }
+    return std::nullopt;
+}
+
+std::optional<DataOperation>
+    DataWatcher::processMovedTo(const EventInfo& receivedEventInfo)
+{
+    // Case 1 : If a file inside a configured and watching directory is renamed.
+    // Case 2 : A file is moved to a configred and watching directory.
+    // Case 3 : If a configured and watching file itself is renamed.
+    fs::path absCopiedPath =
+        _watchDescriptors.at(std::get<WD>(receivedEventInfo)) /
+        std::get<BaseName>(receivedEventInfo);
+
+    if (absCopiedPath.string().starts_with(_dataPathToWatch.string()))
+    {
+        lg2::debug("Processing IN_MOVED_TO for {PATH}", "PATH", absCopiedPath);
+        return std::make_pair(absCopiedPath, DataOps::COPY);
     }
     return std::nullopt;
 }
