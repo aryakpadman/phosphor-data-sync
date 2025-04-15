@@ -157,6 +157,12 @@ class Manager
     sdbusplus::async::task<> parseConfiguration();
 
     /**
+     * @brief API to process the unprocessed notify requests if any during
+     * startup.
+     */
+    sdbusplus::async::task<> processPendingNotifications();
+
+    /**
      * @brief A helper API to initiate sync events, covering the following
      *        scenarios. These event will be initiated based on the BMC role.
      *

@@ -6,6 +6,7 @@
 
 #include "async_command_exec.hpp"
 #include "data_watcher.hpp"
+#include "notify_service.hpp"
 #include "notify_sibling.hpp"
 
 #include <nlohmann/json.hpp>
@@ -49,7 +50,9 @@ sdbusplus::async::task<> Manager::init()
     if (_extDataIfaces->bmcRedundancy())
     {
         // NOLINTNEXTLINE
+        co_await processPendingNotifications();
         co_await startFullSync();
+        co_return co_await startSyncEvents();
     }
 
     // NOLINTNEXTLINE
@@ -98,6 +101,20 @@ sdbusplus::async::task<> Manager::parseConfiguration()
     if (fs::exists(_dataSyncCfgDir) && fs::is_directory(_dataSyncCfgDir))
     {
         std::ranges::for_each(fs::directory_iterator(_dataSyncCfgDir), parse);
+    }
+
+    co_return;
+}
+
+// NOLINTNEXTLINE
+sdbusplus::async::task<> Manager::processPendingNotifications()
+{
+    lg2::info("processing pending notification requests");
+
+    for (const auto& path : fs::directory_iterator(NOTIFY_SERVICES_DIR))
+    {
+        // TODO:  Make it co routine
+        notify::NotifyService notifyService(_ctx, path);
     }
 
     co_return;
