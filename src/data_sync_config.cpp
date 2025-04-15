@@ -53,6 +53,11 @@ DataSyncConfig::DataSyncConfig(const nlohmann::json& config,
         _periodicityInSec = std::nullopt;
     }
 
+    if (config.contains("NotifySibling"))
+    {
+        _notifySibling = config["NotifySibling"];
+    }
+
     if (config.contains("RetryAttempts") && config.contains("RetryInterval"))
     {
         _retry = Retry(

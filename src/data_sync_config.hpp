@@ -160,6 +160,14 @@ struct DataSyncConfig
     std::optional<std::chrono::seconds> _periodicityInSec;
 
     /**
+     * @brief The details of sibling notification
+     *
+     * Holds value only if _syncDirection is bidirectional and notification is
+     * required.
+     */
+     std::optional<nlohmann::json> _notifySibling;
+
+    /**
      * @brief The Retry specific details.
      *
      * @note Holds a value if the specific file or directory uses
