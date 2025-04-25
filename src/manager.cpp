@@ -155,7 +155,7 @@ sdbusplus::async::task<bool>
     using namespace std::string_literals;
     std::string syncCmd{
         "rsync --archive --compress --delete --delete-missing-args --relative"};
-    syncCmd.append(" "s + dataSyncCfg._path);
+    syncCmd.append(" "s + dataSyncCfg._path.string());
 
 #ifdef UNIT_TEST
     syncCmd.append(" "s);
@@ -169,7 +169,7 @@ sdbusplus::async::task<bool>
 
     // Add destination data path
     //syncCmd.append(dataSyncCfg._destPath.value_or(dataSyncCfg._path).string());
-    syncCmd.append(dataSyncCfg._destPath.value_or(fs::path("")));
+    syncCmd.append(dataSyncCfg._destPath.value_or(fs::path("")).string());
 
     lg2::debug("Rsync command: {CMD}", "CMD", syncCmd);
     int result = std::system(syncCmd.c_str()); // NOLINT
