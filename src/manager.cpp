@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <exception>
 #include <fstream>
@@ -155,6 +156,12 @@ sdbusplus::async::task<bool>
     using namespace std::string_literals;
     std::string syncCmd{
         "rsync --archive --compress --delete --delete-missing-args --relative"};
+    if (dataSyncCfg._excludeList.has_value())
+    {
+        //std::string excludeStr =  frameExcludeString(dataSyncCfg._path,
+        //                                    dataSyncCfg._excludeList.value());
+        syncCmd.append(dataSyncCfg._excludeListStr.value());
+    }
     syncCmd.append(" "s + dataSyncCfg._path.string());
 
 #ifdef UNIT_TEST
@@ -201,7 +208,8 @@ sdbusplus::async::task<>
 
         // Create watcher for the dataSyncCfg._path
         watch::inotify::DataWatcher dataWatcher(
-            _ctx, IN_NONBLOCK, eventMasksToWatch, dataSyncCfg._path);
+            _ctx, IN_NONBLOCK, eventMasksToWatch, dataSyncCfg._path,
+            dataSyncCfg._excludeList);
 
         while (!_ctx.stop_requested() && !_syncBMCDataIface.disable_sync())
         {
