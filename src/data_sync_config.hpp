@@ -86,6 +86,12 @@ struct DataSyncConfig
     DataSyncConfig(const nlohmann::json& config, bool isPathDir);
 
     /**
+     * @brief API to convert the user configured exclude list to RSYNC CLI
+     * compatible string with --exclude flag.
+     */
+     void frameExcludeString(const std::vector<fs::path>& excludeList);
+
+    /**
      * @brief Overload the == operator to compare objects.
      *
      * @param[in] dataSyncCfg - The object to check
@@ -179,6 +185,11 @@ struct DataSyncConfig
     std::optional<std::vector<fs::path>> _excludeList;
 
     /**
+     * @brief The exclude List in RSYNC CLI string format
+     */
+    std::optional<std::string> _excludeListStr;
+
+    /**
      * @brief The list of paths to include from synchronization.
      *
      * @note Holds a value if the specific directory opts to
@@ -188,6 +199,7 @@ struct DataSyncConfig
     std::optional<std::vector<fs::path>> _includeList;
 
   private:
+
     /**
      * @brief A helper API to retrieve the corresponding enum type
      *        for a given sync direction string.

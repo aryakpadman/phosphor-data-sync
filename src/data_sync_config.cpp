@@ -68,6 +68,7 @@ DataSyncConfig::DataSyncConfig(const nlohmann::json& config,
     if (config.contains("ExcludeList"))
     {
         _excludeList = config["ExcludeList"].get<std::vector<fs::path>>();
+        frameExcludeString(config["ExcludeList"].get<std::vector<fs::path>>());
     }
     else
     {
@@ -94,6 +95,39 @@ bool DataSyncConfig::operator==(const DataSyncConfig& dataSyncCfg) const
            _retry == dataSyncCfg._retry &&
            _excludeList == dataSyncCfg._excludeList &&
            _includeList == dataSyncCfg._includeList;
+}
+
+void DataSyncConfig::frameExcludeString(const std::vector<fs::path>& excludeList)
+{
+    using namespace std::string_literals;
+
+    if(excludeList.size() == 1)
+    {
+        _excludeListStr = " --exclude="s +
+                fs::relative(excludeList[0], _path).string();
+    }
+    else
+    {
+        std::string excludeListStr{" --exclude={"};
+
+        auto commaSeparatedFold = [this](std::string listToStr,
+                const fs::path& entry)
+        {
+            return std::move(listToStr) + "," +
+                fs::relative(entry,this->_path).string();
+        };
+        excludeListStr.append(std::ranges::fold_left(
+                    std::ranges::subrange(std::next(excludeList.begin()),
+                        excludeList.end()),
+                    fs::relative(excludeList[0], _path).string(),
+                    commaSeparatedFold));
+        excludeListStr.append("}"s);
+
+        _excludeListStr = excludeListStr;
+    }
+
+    lg2::debug("The converted list string : {LISTSTRING}", "LISTSTRING",
+                    _excludeListStr.value());
 }
 
 std::optional<SyncDirection>
