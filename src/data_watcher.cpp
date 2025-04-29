@@ -13,10 +13,11 @@ namespace data_sync::watch::inotify
 DataWatcher::DataWatcher(sdbusplus::async::context& ctx, const int inotifyFlags,
                          const uint32_t eventMasksToWatch,
                          const fs::path& dataPathToWatch, const
+                         std::optional<std::vector<fs::path>> includeList,
                          std::optional<std::vector<fs::path>> excludeList ) :
     _inotifyFlags(inotifyFlags), _eventMasksToWatch(eventMasksToWatch),
-    _dataPathToWatch(dataPathToWatch), _excludeList(excludeList),
-    _inotifyFileDescriptor(inotifyInit()),
+    _dataPathToWatch(dataPathToWatch), _includeList(includeList),
+    _excludeList(excludeList), _inotifyFileDescriptor(inotifyInit()),
     _fdioInstance(
         std::make_unique<sdbusplus::async::fdio>(ctx, _inotifyFileDescriptor()))
 {
@@ -98,6 +99,20 @@ bool DataWatcher::isExcluded(const fs::path& path)
     return false;
 }
 
+bool DataWatcher::isIncluded(const fs::path& path)
+{
+    auto matchesOrChildPath = [&path](const auto& includePath)
+    {
+        return includePath.string().starts_with(path.string());
+    };
+    if (std::ranges::none_of(_includeList.value(), matchesOrChildPath))
+    {
+        lg2::debug("{PATH} not in includeList", "PATH", path);
+        return false;
+    }
+    return true;
+}
+
 void DataWatcher::createWatchers(const fs::path& pathToWatch)
 {
     auto pathToWatchExist = fs::exists(pathToWatch);
@@ -115,6 +130,10 @@ void DataWatcher::createWatchers(const fs::path& pathToWatch)
                     {
                         return;
                     }
+                    else if (_includeList.has_value() && !(isIncluded(entry)))
+                    {
+                        return;
+                    }
                     /*if (_excludeList.has_value())
                     {
                         auto matchesWithEntry = [&entry](const auto& excludePath)
@@ -124,6 +143,21 @@ void DataWatcher::createWatchers(const fs::path& pathToWatch)
                         if (std::ranges::any_of(_excludeList.value(),
                                 matchesWithEntry))
                         {
+                            return;
+                        }
+                    }
+                    else if (_includeList.has_value())
+                    {
+                        auto matchesOrChildOfEntry = [&entry](const auto&
+                                                                includePath)
+                        {
+                            return includePath.string().starts_with(entry.string());
+                        };
+                        if (std::ranges::none_of(_includeList.value(),
+                                matchesOrChildOfEntry))
+                        {
+                            lg2::debug("{ENTRY} not in includeList", "ENTRY",
+                            entry);
                             return;
                         }
                     }*/
@@ -219,12 +253,27 @@ std::optional<DataOperation>
         eventReceivedFor /= "";
     }
 
-    // Skip the events received for the paths which are in excluded list.
     if (_excludeList.has_value())
     {
+        // Skip the events received for the paths which are in excluded list.
         if (std::ranges::contains(_excludeList.value(), eventReceivedFor))
         {
             lg2::debug("Event received for  {PATH} and is in excludedList",
+            "PATH", eventReceivedFor);
+            return std::nullopt;
+        }
+    }
+    else if (_includeList.has_value())
+    {
+        // Skip the events received for the paths which are not in included list
+        // if configured.
+        auto isIncludePath = [&eventReceivedFor](const auto& includePath)
+        {
+            return eventReceivedFor.string().starts_with(includePath.string());
+        };
+        if (std::ranges::none_of(_includeList.value(), isIncludePath))
+        {
+            lg2::debug("Event received for {PATH} and is not in includeList",
             "PATH", eventReceivedFor);
             return std::nullopt;
         }
@@ -328,6 +377,10 @@ std::optional<DataOperation>
                 // exclude list or not.
                 
                 if (_excludeList.has_value() && isExcluded(entry))
+                {
+                    return false;
+                }
+                else if (_includeList.has_value() && !(isIncluded(entry)))
                 {
                     return false;
                 }
