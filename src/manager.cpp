@@ -171,6 +171,15 @@ sdbusplus::async::task<bool>
         syncCmd.append(" "s + modifiedPath.string());
         // syncCmd.append(" "s + dataSyncCfg._path.string());
     }
+    else if ((dataSyncCfg._includeList.has_value()) && (modifiedPath.empty()))
+    {
+        // Configure the paths in include List as SRC paths
+        auto appendToCmd = [&syncCmd](const auto& path)
+        {
+            syncCmd.append(" "s + path.string());
+        };
+        std::ranges::for_each(dataSyncCfg._includeList.value(), appendToCmd);
+    }
     else
     {
         syncCmd.append(" "s + dataSyncCfg._path.string());
@@ -221,7 +230,7 @@ sdbusplus::async::task<>
         // Create watcher for the dataSyncCfg._path
         watch::inotify::DataWatcher dataWatcher(
             _ctx, IN_NONBLOCK, eventMasksToWatch, dataSyncCfg._path,
-            dataSyncCfg._excludeList);
+            dataSyncCfg._includeList, dataSyncCfg._excludeList);
 
         while (!_ctx.stop_requested() && !_syncBMCDataIface.disable_sync())
         {
