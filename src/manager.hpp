@@ -167,7 +167,8 @@ class Manager
      *
      */
     sdbusplus::async::task<bool>
-        syncData(const config::DataSyncConfig& dataSyncCfg);
+        syncData(const config::DataSyncConfig& dataSyncCfg, const fs::path&
+                    modifiedPath = std::string());
 
     /**
      * @brief A helper to API to monitor data to sync if its changed

@@ -151,7 +151,8 @@ sdbusplus::async::task<> Manager::startSyncEvents()
 // concurrent sync changes.
 sdbusplus::async::task<bool>
     // NOLINTNEXTLINE
-    Manager::syncData(const config::DataSyncConfig& dataSyncCfg)
+    Manager::syncData(const config::DataSyncConfig& dataSyncCfg, const fs::path&
+                modifiedPath)
 {
     using namespace std::string_literals;
     std::string syncCmd{
@@ -162,7 +163,18 @@ sdbusplus::async::task<bool>
         //                                    dataSyncCfg._excludeList.value());
         syncCmd.append(dataSyncCfg._excludeListStr.value());
     }
-    syncCmd.append(" "s + dataSyncCfg._path.string());
+    if (!modifiedPath.empty())
+    {
+        // Configure modified path as SRC path if available.
+        lg2::debug("Modified path : {PATH}", "PATH", modifiedPath);
+        //TODO : Add relative and then enable
+        syncCmd.append(" "s + modifiedPath.string());
+        // syncCmd.append(" "s + dataSyncCfg._path.string());
+    }
+    else
+    {
+        syncCmd.append(" "s + dataSyncCfg._path.string());
+    }
 
 #ifdef UNIT_TEST
     syncCmd.append(" "s);
@@ -224,9 +236,9 @@ sdbusplus::async::task<>
                 {
                     break;
                 }
-                for ([[maybe_unused]] const auto& dataOp : dataOperations)
+                for (const auto& dataOp : dataOperations)
                 {
-                    co_await syncData(dataSyncCfg);
+                    co_await syncData(dataSyncCfg, std::get<0>(dataOp));
                 }
             }
         }
