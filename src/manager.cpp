@@ -154,21 +154,22 @@ sdbusplus::async::task<bool>
 {
     using namespace std::string_literals;
     std::string syncCmd{
-        "rsync --archive --compress --delete --delete-missing-args"};
+        "rsync --archive --compress --delete --delete-missing-args --relative"};
     syncCmd.append(" "s + dataSyncCfg._path);
 
 #ifdef UNIT_TEST
     syncCmd.append(" "s);
 #else
-    syncCmd.append(" rsync://localhost:"s);
-    static const auto* siblingBMCRsyncdPort =
-        _extDataIfaces->siblingBmcPos() == 0 ? BMC0_RSYNC_PORT
-                                             : BMC1_RSYNC_PORT;
-    syncCmd.append(siblingBMCRsyncdPort);
+     static const std::string rsyncdURL(std::format(" rsync://localhost:{}/{}",
+             (_extDataIfaces->siblingBmcPos() == 0 ? BMC0_RSYNC_PORT
+                                                   : BMC1_RSYNC_PORT),
+             RSYNCD_MODULE_NAME));
+     syncCmd.append(rsyncdURL);
 #endif
 
     // Add destination data path
-    syncCmd.append(dataSyncCfg._destPath.value_or(dataSyncCfg._path));
+    //syncCmd.append(dataSyncCfg._destPath.value_or(dataSyncCfg._path).string());
+    syncCmd.append(dataSyncCfg._destPath.value_or(fs::path("")));
 
     lg2::debug("Rsync command: {CMD}", "CMD", syncCmd);
     int result = std::system(syncCmd.c_str()); // NOLINT
