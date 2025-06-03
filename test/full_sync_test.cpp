@@ -491,6 +491,18 @@ TEST_F(ManagerTest, FullSyncInProgressTest)
 
         EXPECT_EQ(status, FullSyncStatus::FullSyncInProgress)
             << "FullSync status is not InProgress!";
+
+        // Wait till all full sync spawns to finish and then issue stop request
+        while (status != FullSyncStatus::FullSyncCompleted)
+        {
+            co_await sdbusplus::async::sleep_for(ctx,
+                                                 std::chrono::milliseconds(50));
+            status = manager.getFullSyncStatus();
+        }
+
+        EXPECT_EQ(status, FullSyncStatus::FullSyncCompleted)
+            << "FullSync status is not Completed!";
+
         ctx.request_stop();
 
         // Forcing to trigger inotify events so that all running immediate
@@ -644,6 +656,16 @@ TEST_F(ManagerTest, FullSyncFailed)
                   data3);
         EXPECT_FALSE(fs::exists(destDir4 / fs::relative(srcFile4, "/")));
 
+        // Wait till all full sync spawns to finish and then issue stop request
+        // Note : Since Full Sync is currently forced to always succeed (even if
+        // syncing fails), waiting for status to FullSyncCompleted, change it to
+        // FullSyncFailed once the work around is reverting.
+        while (status != FullSyncStatus::FullSyncCompleted)
+        {
+            co_await sdbusplus::async::sleep_for(ctx,
+                                                 std::chrono::milliseconds(50));
+            status = manager.getFullSyncStatus();
+        }
         ctx.request_stop();
 
         // Forcing to trigger inotify events so that all running immediate

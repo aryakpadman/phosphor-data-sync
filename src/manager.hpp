@@ -173,6 +173,34 @@ class Manager
                  fs::path srcPath = fs::path{});
 
     /**
+     * @brief To execute bash commands asynchronously and redirect the
+     *        comamnd output to a pipe to read by parent process using
+     *        'posix_spawn'.
+     *
+     * @param[in] - cmd - The bash command to execute
+     *
+     * @return sdbusplus::async::task<std::pair<int, std::string>>
+     *              - int : Exit code of the spawned process (-1 on failure)
+     *              - std::string : Combined stdout and stderr output
+     */
+    sdbusplus::async::task<std::pair<int, std::string>>
+        execCmdBySpawn(const std::string& cmd);
+
+    /**
+     * @brief API to wait asynchronously until child completes the command
+     *        execution and read and accumulate the output from the file
+     *        descriptor once it is ready.
+     *
+     * @param[in] - fd - file descriptor to read the data from.
+     *
+     * @return - sdbusplus::async::task<std::string>
+     *             On success - The accumulated output from the descriptor.
+     *             On failure - An empty string.
+     *
+     */
+    sdbusplus::async::task<std::string> waitForCmdCompletion(int fd);
+
+    /**
      * @brief A helper to API to monitor data to sync if its changed
      *
      * @param[in] dataSyncCfg - The data sync config to sync

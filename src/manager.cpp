@@ -4,6 +4,9 @@
 
 #include "data_watcher.hpp"
 
+#include <fcntl.h>
+#include <spawn.h>
+
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
 
@@ -143,9 +146,6 @@ sdbusplus::async::task<> Manager::startSyncEvents()
     co_return;
 }
 
-// TODO: This isn't truly an async operation — Need to use popen/posix_spawn to
-// run the rsync command asynchronously but it will be handled as part of
-// concurrent sync changes.
 sdbusplus::async::task<bool>
     // NOLINTNEXTLINE
     Manager::syncData(const config::DataSyncConfig& dataSyncCfg,
@@ -177,8 +177,9 @@ sdbusplus::async::task<bool>
     // Add destination data path if configured
     syncCmd.append(dataSyncCfg._destPath.value_or(fs::path("")));
     lg2::debug("RSYNC CMD : {CMD}", "CMD", syncCmd);
-    int result = std::system(syncCmd.c_str()); // NOLINT
-    if (result != 0)
+
+    auto result = co_await execCmdBySpawn(syncCmd); // NOLINT
+    if (result.first != 0)
     {
         // TODOs:
         // 1. Retry based on rsync error code
@@ -196,6 +197,155 @@ sdbusplus::async::task<bool>
         co_return false;
     }
     co_return true;
+}
+
+sdbusplus::async::task<std::pair<int, std::string>>
+    Manager::execCmdBySpawn(const std::string& cmd)
+{
+    pid_t pid;
+    int pipefd[2];
+    posix_spawn_file_actions_t fileActions;
+
+    // Create pipe for the IPC
+    if (pipe(pipefd) == -1)
+    {
+        lg2::error("Failed to create pipe. Errno : {ERRNO}, Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+        co_return std::make_pair(-1, "");
+    }
+
+    // Initialize the file action object
+    if (posix_spawn_file_actions_init(&fileActions) != 0)
+    {
+        lg2::error("Failed to initialize the file actions. Errno : {ERRNO}, "
+                   "Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+        close(pipefd[0]);
+        close(pipefd[1]);
+        co_return std::make_pair(-1, "");
+    }
+
+    // Duplicate the child's STDOUT and STDERR to the write end of the pipe
+    if ((posix_spawn_file_actions_adddup2(&fileActions, pipefd[1],
+                                          STDOUT_FILENO) != 0) ||
+        (posix_spawn_file_actions_adddup2(&fileActions, pipefd[1],
+                                          STDERR_FILENO) != 0))
+    {
+        lg2::error(
+            "Failed to duplicate the STDOUT/STDERR to pipe. Errno : {ERRNO}, Error : {MSG}",
+            "ERRNO", errno, "MSG", strerror(errno));
+    }
+
+    // Close the read end of the pipe in child
+    if (posix_spawn_file_actions_addclose(&fileActions, pipefd[0]) != 0)
+    {
+        lg2::error("Failed to close the pipe's read end in child. Errno : "
+                   "{ERRNO}, Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+    }
+
+    const char* argv[] = {"/bin/sh", "-c", cmd.c_str(), nullptr};
+
+    int spawnResult = posix_spawn(&pid, "/bin/sh", &fileActions, nullptr,
+                                  const_cast<char* const*>(argv), nullptr);
+
+    if (posix_spawn_file_actions_destroy(&fileActions) != 0)
+    {
+        lg2::error("Failed to destroy the file_actions object. Errno: {ERRNO}, "
+                   "Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+    }
+
+    // Close write end in parent
+    if (close(pipefd[1]) != 0)
+    {
+        lg2::error("Failed to close the pipe's write end in parent. Errno : "
+                   "{ERRNO}, Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+    }
+
+    if (spawnResult != 0)
+    {
+        lg2::error("Command execution failed : {ERROR}", "ERROR",
+                   strerror(spawnResult));
+        close(pipefd[0]);
+        co_return std::make_pair(-1, "");
+    }
+
+    // Wait until the child completes its execution
+    auto output = co_await waitForCmdCompletion(pipefd[0]);
+
+    // Close read end in parent
+    if (close(pipefd[0]) != 0)
+    {
+        lg2::error("Failed to close the pipe's read end in parent. Errno : "
+                   "{ERRNO}, Error : {MSG}",
+                   "ERRNO", errno, "MSG", strerror(errno));
+    }
+
+    // Wait for child process to exit
+    int status = -1;
+    waitpid(pid, &status, 0);
+
+    int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (exitCode != 0)
+    {
+        lg2::error("Sync failed, command[{CMD}] errorCode[{ERRCODE}] "
+                   "Error : [{ERROR}]",
+                   "CMD", cmd, "ERRCODE", exitCode, "ERROR", output);
+    }
+
+    co_return std::make_pair(exitCode, output);
+}
+
+sdbusplus::async::task<std::string> Manager::waitForCmdCompletion(int fd)
+{
+    // Set non-blocking mode for the file descriptor
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
+        lg2::error(
+            "Failed to set the fd non-blocking mode. Errno: {ERRNO}, Msg: {MSG}",
+            "ERRNO", errno, "MSG", strerror(errno));
+        co_return "";
+    }
+
+    std::string output;
+    std::array<char, 256> buffer{};
+    std::unique_ptr<sdbusplus::async::fdio> fdioInstance =
+        std::make_unique<sdbusplus::async::fdio>(_ctx, fd);
+
+    while (!_ctx.stop_requested())
+    {
+        co_await fdioInstance->next();
+
+        int n = read(fd, buffer.data(), buffer.size());
+        if (n > 0)
+        {
+            output += buffer.data();
+            buffer.fill(0);
+        }
+        else if (n == 0)
+        {
+            // EOF
+            break;
+        }
+        else if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            lg2::debug("EAGAIN || EWOULDBLOCK");
+            continue;
+        }
+        else
+        {
+            lg2::error("read failed on fd[{FD}] : [{ERROR}]", "FD", fd, "ERROR",
+                       strerror(errno));
+            break;
+        }
+    }
+
+    fdioInstance.reset();
+
+    co_return output;
 }
 
 sdbusplus::async::task<>
