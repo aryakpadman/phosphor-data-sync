@@ -35,7 +35,12 @@
             "Path": "/directory2/path/to/sync/",
             "Description": "Add details about the data and purpose of the synchronization",
             "SyncDirection": "Bidirectional",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "NotifySibling": {
+                "NotifyOnPaths": ["/var/lib/abcd"],
+                "Mode": "DBus",
+                "NotifyServices": ["Service1", "Service2"]
+            }
         }
     ]
 }
