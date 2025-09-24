@@ -283,8 +283,13 @@ sdbusplus::async::task<bool>
 
         co_return false;
     }
-    else if (dataSyncCfg._notifySibling.has_value())
+    else if ((dataSyncCfg._notifySibling.has_value()) && (result.first == 0) &&
+             (utility::rsync::getTransferredBytes(result.second) != 0))
     {
+        // Rsync success alone doesn’t guarantee data got updated on the remote.
+        // Checking bytes transferred helps to confirm if any data mismatch was
+        // actually synced.
+
         if (dataSyncCfg._notifySibling.value()._paths.has_value())
         {
             if (!(dataSyncCfg._notifySibling.value()._paths.value().contains(
