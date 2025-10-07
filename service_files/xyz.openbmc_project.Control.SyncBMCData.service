@@ -8,6 +8,7 @@ ExecStart=/usr/libexec/phosphor-data-sync/phosphor-rbmc-data-sync-mgr
 Restart=always
 Type=dbus
 BusName=xyz.openbmc_project.Control.SyncBMCData
+ExecReload=kill -HUP $MAINPID
 
 [Install]
 WantedBy=obmc-bmc-active.target
