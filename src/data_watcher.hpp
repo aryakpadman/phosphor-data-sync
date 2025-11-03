@@ -16,10 +16,11 @@
 namespace data_sync::watch::inotify
 {
 
-using DataSyncCfg = data_sync::config::DataSyncConfig;
-
 namespace fs = std::filesystem;
 namespace utility = data_sync::utility;
+
+using excludeListSet = std::unordered_set<fs::path>;
+using excludeListStr = std::string;
 
 /**
  * @brief A tuple which has the info related to the occured inotify event
@@ -79,12 +80,15 @@ class DataWatcher
      *  @param[in] ctx - The async context object
      *  @param[in] inotifyFlags - inotify flags to watch
      *  @param[in] eventMasksToWatch - mask of interested events to watch
-     *  @param[in] dataSyncCfg - Reference to the DataSyncConfig object which
-     *                           has the data path to watch and related info.
+     *  @param[in] excludeList - The list of paths to be excluded from
+     *                           monitoring
+     *  @param[in] excludeList - The list of paths should be included while
+     *                           monitoring
      */
     DataWatcher(sdbusplus::async::context& ctx, int inotifyFlags,
-                uint32_t eventMasksToWatch, const DataSyncCfg& dataSyncCfg);
-
+                  uint32_t eventMasksToWatch, const fs::path& dataPathToWatch,
+                  std::optional<std::pair<excludeListSet, excludeListStr>> excludeList = std::nullopt,
+                  std::optional<std::unordered_set<fs::path>> includeList = std::nullopt);
     /**
      * @brief Destructor
      * Remove the inotify watch and close fd's
@@ -127,7 +131,33 @@ class DataWatcher
      * @brief  A reference to the data sysnc config object
      *         The object contains the info about the path to be watched.
      */
-    const DataSyncCfg& _dataSyncCfg;
+    //const DataSyncCfg& _dataSyncCfg;
+
+    /**
+     * @brief The file or directory path to be monitored.
+     */
+    const fs::path& _dataPathToWatch;
+
+    /**
+     * @brief The list of paths to exclude from monitoring.
+     *
+     * This optional pair holds:
+     *   - A set of filesystem paths to be excluded.
+     *   - A string with rsync `--filter` option derived from the set of paths.
+     *
+     * @note Holds a value if the specific directory prefer to
+     *       exclude some file/directory from synchronization.
+     */
+    std::optional<std::pair<excludeListSet, excludeListStr>> _excludeList;
+
+    /**
+     * @brief The list of paths to include from synchronization.
+     *
+     * @note Holds a value if the specific directory opts to
+     *       include only certain file/directory while monitoring
+     *       the path.
+     */
+    std::optional<std::unordered_set<fs::path>> _includeList;
 
     /**
      * @brief The map of unique watch descriptors associated with an configured

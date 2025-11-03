@@ -336,9 +336,12 @@ sdbusplus::async::task<>
             eventMasksToWatch |= IN_CREATE | IN_DELETE;
         }
 
-        // Create watcher for the dataSyncCfg._path
         watch::inotify::DataWatcher dataWatcher(_ctx, IN_NONBLOCK,
-                                                eventMasksToWatch, dataSyncCfg);
+                                                eventMasksToWatch, dataSyncCfg._path,
+                                                dataSyncCfg._excludeList,
+                                                //(dataSyncCfg._excludeList.has_value()?
+                                                //std::make_optional(dataSyncCfg._excludeList->first) : std::nullopt),
+                                                dataSyncCfg._includeList);
 
         while (!_ctx.stop_requested() && !_syncBMCDataIface.disable_sync())
         {
