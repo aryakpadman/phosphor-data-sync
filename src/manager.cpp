@@ -304,10 +304,11 @@ sdbusplus::async::task<void>
     Manager::triggerSiblingNotification(
         const config::DataSyncConfig& dataSyncCfg, const std::string& srcPath)
 {
+    std::error_code ec;
     if (dataSyncCfg._notifySibling.value()._paths.has_value())
     {
         if (!(dataSyncCfg._notifySibling.value()._paths.value().contains(
-                srcPath)))
+                srcPath)) && (!fs::equivalent(srcPath ,dataSyncCfg._path, ec)))
         {
             // Modified path doesn't need to notify
             lg2::debug("Sibling notification not configured for the path : "
