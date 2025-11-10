@@ -31,6 +31,81 @@ NotifyService::NotifyService(sdbusplus::async::context& ctx,
     _ctx.spawn(init(notifyFilePath));
 }
 
+sdbusplus::async::task<std::string>
+    // NOLINTNEXTLINE
+    NotifyService::getDbusObjectPath(const std::string& service,
+                                     const std::string& interface)
+{
+    std::string objectPath{};
+
+    constexpr auto objMapper =
+        sdbusplus::async::proxy()
+            .service("xyz.openbmc_project.ObjectMapper")
+            .path("/xyz/openbmc_project/object_mapper")
+            .interface("xyz.openbmc_project.ObjectMapper");
+
+    /**
+     * Output of the DBus call will be a nested map, where
+     * outer map : Map of DBus Object Path and the inner map
+     * inner map : Map of the service name and list of interfaces it has
+     * implemented.
+     */
+    using Services = std::map<std::string, std::vector<std::string>>;
+    using Paths = std::map<std::string, Services>;
+    Paths subTreesInfo = co_await objMapper.call<Paths>(
+        _ctx, "GetSubTree", "/", 0, std::vector<std::string>{interface});
+
+    auto outerMapItr = std::ranges::find_if(subTreesInfo,
+                                            [&service](const auto& outerMap) {
+        return std::ranges::any_of(outerMap.second,
+                                   [&service](const auto& serviceIfacesList) {
+            return serviceIfacesList.first == service;
+        });
+    });
+    if (outerMapItr != subTreesInfo.end())
+    {
+        objectPath = outerMapItr->first;
+    }
+    else
+    {
+        lg2::error(
+            "Unable to find the object path which hosts the interface[{INTERFACE}],"
+            " of the service {SERVICE}",
+            "INTERFACE", interface, "SERVICE", service);
+        throw std::runtime_error("Unable to find the DBus object path");
+    }
+    co_return objectPath;
+}
+
+// NOLINTNEXTLINE
+sdbusplus::async::task<> NotifyService::invokeNotifyDBusMethod(
+    [[maybe_unused]] const std::string& service,
+    [[maybe_unused]] const fs::path& modifiedDataPath)
+{
+    // TODO : Complete DBus notification method once INTERFACE and method name
+    // finalized
+    // Step 1 : Invoke getDbusObjectPath()
+    // Step 2 : Using the object path,interface and service, frame the DBus
+    // :method call
+    lg2::warning("DBus notification support is not available currently");
+
+    co_return;
+}
+
+sdbusplus::async::task<>
+    // NOLINTNEXTLINE
+    NotifyService::sendDBusNotification(std::vector<std::string> services,
+                                        fs::path modifiedDataPath)
+{
+    for (const auto& service : services)
+    {
+        // NOLINTNEXTLINE
+        co_await invokeNotifyDBusMethod(service, modifiedDataPath);
+    }
+
+    co_return;
+}
+
 sdbusplus::async::task<>
     // NOLINTNEXTLINE
     NotifyService::sendSystemDNotification(
@@ -88,7 +163,12 @@ sdbusplus::async::task<> NotifyService::init(fs::path notifyFilePath)
     }
     if (notifyfileData["NotifyInfo"]["Mode"] == "DBus")
     {
-        // TODO : Send DBUS notification
+        // Send DBUS notification
+        // NOLINTNEXTLINE
+        co_await sendDBusNotification(
+            notifyfileData["NotifyInfo"]["NotifyServices"]
+                .get<std::vector<std::string>>(),
+            notifyfileData["ModifiedDataPath"]);
     }
     else if ((notifyfileData["NotifyInfo"]["Mode"] == "Systemd"))
     {

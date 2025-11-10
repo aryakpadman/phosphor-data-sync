@@ -33,6 +33,46 @@ class NotifyService
 
   private:
     /**
+     * @brief Get the Dbus Object Path object associated with the service
+     *        which implements the given interface.
+     *
+     * @param[in] service - The DBus service name
+     * @param[in] interface - The DBus Interface name
+     *
+     * @return DBus Object path as sdbusplus::async::task<std::string>
+     */
+    sdbusplus::async::task<std::string>
+        getDbusObjectPath(const std::string& service,
+                          const std::string& interface);
+
+    /**
+     * @brief API to notify the requested services by triggering the DBus method
+     *        implemented at the service to be notified.
+     *
+     * @param[in] service - The DBus service name which need to be notified
+     *
+     * @return void
+     */
+    sdbusplus::async::task<>
+        invokeNotifyDBusMethod(const std::string& service,
+                               const fs::path& modifiedDataPath);
+
+    /**
+     * @brief API to the initiate the DBus notification to all the
+     *.       configured services if the mode of notification is DBus.
+     *
+     * @param[in] services - The vector of DBus service name which need to be
+     *                       notified
+     * @param[in] modifiedDataPath - The root path of the modified path given in
+     *the request
+     *
+     * @return void
+     */
+    sdbusplus::async::task<>
+        sendDBusNotification(std::vector<std::string> services,
+                             fs::path modifiedDataPath);
+
+    /**
      *  @brief API to initiate the systemd notification to all the configured
      *         services if the mode of notification is systemd. It will trigger
      *         either systemd reload or restart depends on the configured Method
