@@ -44,10 +44,16 @@ sdbusplus::async::task<> Manager::init()
             "Sync is disabled, data sync cannot be performed to the sibling BMC.");
         co_return;
     }
+
+// Sibling notification logic is tested independently in notify_service_test
+// Disabled here to avoid unwanted watch additions while testing manager logic.
+// TODO: Revisit after coroutine-based sender/receiver logic is implemented.
+#ifndef UNIT_TEST
     if (fs::exists(NOTIFY_SERVICES_DIR))
     {
         _ctx.spawn(monitorServiceNotifications());
     }
+#endif
 
     // TODO: Explore the possibility of running FullSync and Background Sync
     // concurrently
@@ -108,6 +114,24 @@ sdbusplus::async::task<> Manager::parseConfiguration()
     co_return;
 }
 
+sdbusplus::async::task<> Manager::processPendingNotifications()
+{
+    {
+        static constexpr auto notifyServiceDir = NOTIFY_SERVICES_DIR;
+        lg2::info("Initiates processing of pending sync notification requests"
+                  " from {DIR}",
+                  "DIR", notifyServiceDir);
+    }
+
+    for (const auto& path : fs::directory_iterator(NOTIFY_SERVICES_DIR))
+    {
+        // TODO:  Make it co routine if needs
+        notify::NotifyService notifyService(_ctx, *_extDataIfaces, path);
+    }
+
+    co_return;
+}
+
 // NOLINTNEXTLINE
 sdbusplus::async::task<> Manager::monitorServiceNotifications()
 {
@@ -115,7 +139,7 @@ sdbusplus::async::task<> Manager::monitorServiceNotifications()
 
     try
     {
-        // TODO : Process the unprocessed notify requests during startup
+        _ctx.spawn(processPendingNotifications());
 
         // Start watching the NOTIFY_SERVICE_DIR
         // Monitoring for IN_MOVED_TO only as rsync creates a temporary file in
