@@ -29,11 +29,19 @@ class NotifyService
      * @param[in] ctx - The async context object for asynchronous operation
      * @param[in] extDataIfaces - The external data interface object to get
      *                            the external data
-     * @param[in] notifyFilePath - The root path of the received notify request
      */
     NotifyService(sdbusplus::async::context& ctx,
-                  data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
-                  const fs::path& notifyFilePath);
+                  data_sync::ext_data::ExternalDataIFaces& extDataIfaces);
+
+    /**
+     * @brief The API which help user to trigger the processing of the
+     *        received request path
+     *
+     * @param[in] notifyFilePath - The root path of the received notify
+     *                             request
+     */
+    sdbusplus::async::task<>
+        init(fs::path notifyFilePath);
 
   private:
     /**
@@ -57,7 +65,7 @@ class NotifyService
      *
      * @return void
      */
-    sdbusplus::async::task<> init(fs::path notifyFilePath);
+    sdbusplus::async::task<> process(fs::path notifyFilePath);
 
     /**
      * @brief The async context object used to perform operations asynchronously

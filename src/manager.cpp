@@ -123,10 +123,11 @@ sdbusplus::async::task<> Manager::processPendingNotifications()
                   "DIR", notifyServiceDir);
     }
 
+    notify::NotifyService notifyService(_ctx, *_extDataIfaces);
     for (const auto& path : fs::directory_iterator(NOTIFY_SERVICES_DIR))
     {
-        // TODO:  Make it co routine if needs
-        notify::NotifyService notifyService(_ctx, *_extDataIfaces, path);
+        // TODO:  Make it to spawn if needs
+        co_await notifyService.init(path);
     }
 
     co_return;
@@ -147,6 +148,7 @@ sdbusplus::async::task<> Manager::monitorServiceNotifications()
         watch::inotify::DataWatcher notifyWatcher(
             _ctx, IN_NONBLOCK, IN_MOVED_TO, NOTIFY_SERVICES_DIR);
 
+        notify::NotifyService notifyService(_ctx, *_extDataIfaces);
         while (!_ctx.stop_requested())
         {
             if (auto dataOperations = co_await notifyWatcher.onDataChange();
@@ -156,8 +158,7 @@ sdbusplus::async::task<> Manager::monitorServiceNotifications()
                 // when disable sync is set to true.
                 for (const auto& [path, Op] : dataOperations)
                 {
-                    notify::NotifyService notifyService(_ctx, *_extDataIfaces,
-                                                        path);
+                    _ctx.spawn(notifyService.init(path));
                 }
             }
         }

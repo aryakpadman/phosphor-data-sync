@@ -26,10 +26,14 @@ nlohmann::json readFromFile(const fs::path& notifyFilePath)
 
 NotifyService::NotifyService(
     sdbusplus::async::context& ctx,
-    data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
-    const fs::path& notifyFilePath) : _ctx(ctx), _extDataIfaces(extDataIfaces)
+    data_sync::ext_data::ExternalDataIFaces& extDataIfaces) :
+    _ctx(ctx), _extDataIfaces(extDataIfaces)
+{}
+
+sdbusplus::async::task<>
+    NotifyService::init(fs::path notifyFilePath)
 {
-    _ctx.spawn(init(notifyFilePath));
+    co_return co_await process(notifyFilePath);
 }
 
 // NOLINTNEXTLINE
@@ -65,7 +69,7 @@ sdbusplus::async::task<>
 }
 
 // NOLINTNEXTLINE
-sdbusplus::async::task<> NotifyService::init(fs::path notifyFilePath)
+sdbusplus::async::task<> NotifyService::process(fs::path notifyFilePath)
 {
     nlohmann::json notifyRqstJson{};
     try
