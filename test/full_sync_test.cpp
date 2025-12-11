@@ -599,7 +599,13 @@ TEST_F(ManagerTest, FullSyncFailed)
     std::string data4{"Data written on the file4\n"};
     // ManagerTest::writeData(srcFile4, data4);
     // ASSERT_EQ(ManagerTest::readData(srcFile4), data4);
-
+    ON_CALL(*mockExtDataIfaces,
+            createErrorLog(testing::_, testing::_, testing::_))
+        .WillByDefault([](const std::string&,
+                          const data_sync::ext_data::ErrorLevel&,
+                          const nlohmann::json&) -> sdbusplus::async::task<> {
+        co_return;
+    });
     data_sync::Manager manager{ctx, std::move(extDataIface),
                                ManagerTest::dataSyncCfgDir};
 
@@ -616,16 +622,10 @@ TEST_F(ManagerTest, FullSyncFailed)
             status = manager.getFullSyncStatus();
         }
 
-        // NOTE: The following test checks are commented out temporarily.
-        // Since Full Sync is currently forced to always succeed (even if
-        // syncing fails), there is no failure scenario being triggered, and
-        // these tests will not pass. These checks should be re-enabled once
-        // proper Full Sync failure handling is implemented
-
-        // EXPECT_EQ(status, FullSyncStatus::FullSyncFailed)
-        // << "FullSync status is not Failed!!";
-        // EXPECT_EQ(manager.getSyncEventsHealth(), SyncEventsHealth::Critical)
-        // << "SyncEventsHealth should be Critical.";
+        EXPECT_EQ(status, FullSyncStatus::FullSyncFailed)
+            << "FullSync status is not Failed!!";
+        EXPECT_EQ(manager.getSyncEventsHealth(), SyncEventsHealth::Critical)
+            << "SyncEventsHealth should be Critical.";
 
         EXPECT_EQ(ManagerTest::readData(destDir1 / fs::relative(srcFile1, "/")),
                   data1);

@@ -406,11 +406,9 @@ sdbusplus::async::task<bool>
         co_return co_await syncData(cfg, std::move(srcPath), retryCount);
     }
 
-    // NOTE: The following line is commented out as part of a temporary
-    // workaround. We are forcing Full Sync to succeed even if data syncing
-    // fails. This change should be reverted once proper error handling is
-    // implemented.
-    // setSyncEventsHealth(SyncEventsHealth::Critical);
+    // All retry attempts exhausted, mark sync event health as critical
+    setSyncEventsHealth(SyncEventsHealth::Critical);
+
     lg2::error("Sync failed after [{MAX_ATTEMPTS}] retries for [{SRC_PATH}]",
                "MAX_ATTEMPTS", cfg._retry->_retryAttempts, "SRC_PATH",
                currentSrcPath);
@@ -513,9 +511,16 @@ sdbusplus::async::task<bool>
         case 14: // Error in IPC code
         case 22: // Error allocating core memory buffers
         {
+            // Mark sync event health as critical when a non-retryable
+            // (permanent) sync error occurs.
+            setSyncEventsHealth(SyncEventsHealth::Critical);
+
+            co_await _extDataIfaces->createErrorLog(
+                "xyz.openbmc_project.RBMC_DataSync.Error.SyncFailure",
+                ext_data::ErrorLevel::Warning, {});
             lg2::error(
                 "Error syncing [{PATH}], ErrCode: {ERRCODE}, Error: {ERROR}"
-                "RsyncCLI: [RSYNC_CMD]",
+                "RsyncCLI: [{RSYNC_CMD}]",
                 "PATH", currentSrcPath, "ERRCODE", result.first, "ERROR",
                 result.second, "RSYNC_CMD", syncCmd);
             co_return false;
@@ -709,15 +714,8 @@ sdbusplus::async::task<void> Manager::startFullSync()
     }
     else
     {
-        // Forcefully marking full sync as successful, even if data syncing
-        // fails.
-        // TODO: Revert this workaround once the proper logic is implemented
-        setFullSyncStatus(FullSyncStatus::FullSyncCompleted);
-        setSyncEventsHealth(SyncEventsHealth::Ok);
-        lg2::info("Full Sync passed temporarily despite sync failures");
-
-        // setFullSyncStatus(FullSyncStatus::FullSyncFailed);
-        // lg2::info("Full Sync failed");
+        setFullSyncStatus(FullSyncStatus::FullSyncFailed);
+        lg2::info("Full Sync failed");
     }
 
     // total duration/time diff of the Full Sync operation
