@@ -14,6 +14,33 @@ namespace data_sync::notify
 namespace fs = std::filesystem;
 
 /**
+ * @brief The structure contains all retry-related details
+ *        if notification fails for a service
+ */
+struct Retry
+{
+    /**
+     * @brief The constructor
+     *
+     * @param[in] retryAttempts - The number of retries
+     * @param[in] retryIntervalInSec - The interval in which retry will
+     *                                 occur.
+     */
+    Retry(uint8_t retryAttempts,
+          const std::chrono::seconds& retryIntervalInSec);
+
+    /**
+     * @brief Number of retries.
+     */
+    uint8_t _retryAttempts;
+
+    /**
+     * @brief Retry interval in seconds
+     */
+    std::chrono::seconds _retryIntervalInSec;
+};
+
+/**
  * @class NotifyService
  *
  * @brief The class which contains the APIs to process the sibling notification
@@ -37,9 +64,23 @@ class NotifyService
      */
     NotifyService(sdbusplus::async::context& ctx,
                   data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
-                  const fs::path& notifyFilePath, CleanupCallback cleanup);
+                  const fs::path& notifyFilePath, uint8_t retryAttempts,
+                  std::chrono::seconds retryIntervalInSec,
+                  CleanupCallback cleanup);
 
   private:
+
+    /**
+     * @brief
+     *
+     * @param[in] service
+     * @param[in] systemdMethod
+     *
+     * @return sdbusplus::async::task<>
+     */
+    sdbusplus::async::task<> sendSystemDNotification
+        (const std::string& service, const std::string& systemdMethod);
+
     /**
      * @brief API to process the received notification request to all the
      *        configured services if configured mode is systemd
@@ -50,7 +91,7 @@ class NotifyService
      * @return sdbusplus::async::task<>
      */
     sdbusplus::async::task<>
-        sendSystemDNotification(const nlohmann::json& notifyRqstJson);
+        systemDNotify(const nlohmann::json& notifyRqstJson);
 
     /**
      * @brief The API to trigger the notification to the configured service upon
@@ -74,6 +115,12 @@ class NotifyService
      *        external dependent data.
      */
     data_sync::ext_data::ExternalDataIFaces& _extDataIfaces;
+
+    /**
+     * @brief The object containing retry related info
+     *
+     */
+    Retry _retryInfo;
 
     /**
      * @brief  Callback function invoked when notification processing

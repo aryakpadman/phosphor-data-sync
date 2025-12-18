@@ -139,7 +139,54 @@ sdbusplus::async::task<>
     co_return;
 }
 
-sdbusplus::async::task<> ExternalDataIFacesImpl::systemDServiceAction(
+sdbusplus::async::task<sdbusplus::message::object_path>
+    ExternalDataIFacesImpl::getServiceObjPath(const std::string& service) const
+{
+    constexpr auto systemd = sdbusplus::async::proxy()
+                                 .service(service::systemd)
+                                 .path(object_path::systemd)
+                                 .interface(interface::systemdMgr);
+
+    co_return co_await systemd.call<sdbusplus::message::object_path>(
+        _ctx, "GetUnit", service);
+}
+
+sdbusplus::async::task<std::string> ExternalDataIFacesImpl::getServiceState(
+    const std::string& service) const
+{
+    try
+    {
+        auto serviceObjPath = co_await getServiceObjPath(service);
+
+        auto systemd = sdbusplus::async::proxy()
+                           .service(service::systemd)
+                           .path(serviceObjPath.str)
+                           .interface(interface::systemdUnit);
+        auto state =
+            co_await systemd.get_property<std::string>(_ctx, "ActiveState");
+
+        co_return state;
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        // For some units systemd returns NoSuchUnit if it isn't running.
+        if ((e.name() == nullptr) ||
+            (std::string{e.name()} != "org.freedesktop.systemd1.NoSuchUnit"))
+        {
+            lg2::error(
+                "Unable to determine if {SERVICE} is running: {ERROR}. Assuming it isn't.",
+                "SERVICE", service, "ERROR", e);
+        }
+        else
+        {
+            lg2::debug("Got a NoSuchUnit error for {SERVICE}", "SERVICE", service);
+        }
+    }
+
+    co_return "inactive";
+}
+
+sdbusplus::async::task<bool> ExternalDataIFacesImpl::systemDServiceAction(
     const std::string& service, const std::string& systemdMethod)
 {
     try
@@ -154,12 +201,31 @@ sdbusplus::async::task<> ExternalDataIFacesImpl::systemDServiceAction(
                   "METHOD", systemdMethod, "SERVICE", service);
         co_await systemdReload.call<objectPath>(_ctx, systemdMethod, service,
                                                 "replace");
+
+        std::string state;
+        while ((state != "active") && (state != "failed"))
+        {
+            co_await sdbusplus::async::sleep_for(_ctx, std::chrono::seconds{1});
+            state = co_await getServiceState(service);
+            //DO i need timeout here????
+        }
+
+        lg2::debug("Finished waiting for {SERVICE} to complete restart/reload (result = {STATE})",
+             "SERVICE", service, "STATE", state);
+
+        if(state == "failed")
+        {
+            co_return false;
+        }
     }
     catch (const std::exception& e)
     {
-        throw std::runtime_error(std::format("DBus call failed, {}", e.what()));
+        //throw std::runtime_error(std::format("DBus call failed, {}", e.what()));
+        lg2::error("DBus call to {METHOD}:{SERVICE} failed, Error: {ERROR}",
+            "METHOD", systemdMethod, "SERVICE", service, "ERROR", e);
+        co_return false;
     }
-    co_return;
+    co_return true;
 }
 
 sdbusplus::async::task<> ExternalDataIFacesImpl::watchRedundancyMgrProps()

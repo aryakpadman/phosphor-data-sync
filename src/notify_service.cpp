@@ -14,6 +14,12 @@
 
 namespace data_sync::notify
 {
+
+Retry::Retry(uint8_t retryAttempts,
+             const std::chrono::seconds& retryIntervalInSec) :
+    _retryAttempts(retryAttempts), _retryIntervalInSec(retryIntervalInSec)
+{}
+
 namespace file_operations
 {
 nlohmann::json readFromFile(const fs::path& notifyFilePath)
@@ -28,15 +34,56 @@ nlohmann::json readFromFile(const fs::path& notifyFilePath)
 NotifyService::NotifyService(
     sdbusplus::async::context& ctx,
     data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
-    const fs::path& notifyFilePath, CleanupCallback cleanup) :
-    _ctx(ctx), _extDataIfaces(extDataIfaces), _cleanup(std::move(cleanup))
+    const fs::path& notifyFilePath, uint8_t retryAttempts,
+    std::chrono::seconds retryIntervalInSec, CleanupCallback cleanup) :
+    _ctx(ctx), _extDataIfaces(extDataIfaces),
+    _retryInfo(retryAttempts, retryIntervalInSec),
+    _cleanup(std::move(cleanup))
 {
     _ctx.spawn(init(notifyFilePath));
 }
 
+sdbusplus::async::task<> NotifyService::sendSystemDNotification(
+    const std::string& service, const std::string& systemdMethod)
+{
+    // retryIndex = 0 indicates initial attempt, rest implies retries
+    uint8_t retryIndex = 0;
+    while (retryIndex <= _retryInfo._retryAttempts)
+    {
+        bool result = co_await _extDataIfaces.systemDServiceAction(service, systemdMethod);
+
+        if (result)
+        {
+            // No retries required
+            co_return;
+        }
+
+        lg2::error("DBus call to [{METHOD}:{SERVICE}] failed...",
+            "METHOD", systemdMethod, "SERVICE", service);
+
+        retryIndex++;
+        if (retryIndex <= _retryInfo._retryAttempts)
+        {
+            lg2::debug("Scheduling retry[{ATTEMPT}/{MAX}] for {SERVICE} after {SEC}s",
+                       "ATTEMPT", retryIndex, "MAX", _retryInfo._retryAttempts,
+                       "SERVICE", service, "SEC", _retryInfo._retryIntervalInSec.count());
+
+            co_await sleep_for(_ctx, _retryInfo._retryIntervalInSec);
+        }
+    }
+
+    //TODO : Create info PEL here
+    lg2::error("Failed to notify {SERVICE} by {METHOD} ; All retries[{ATTEMPT}/{MAX}] "
+        "exhausted","SERVICE", service, "METHOD", systemdMethod,
+        "ATTEMPT", _retryInfo._retryAttempts,
+        "MAX", _retryInfo._retryAttempts);
+    co_return;
+}
+
+
 // NOLINTNEXTLINE
 sdbusplus::async::task<>
-    NotifyService::sendSystemDNotification(const nlohmann::json& notifyRqstJson)
+    NotifyService::systemDNotify(const nlohmann::json& notifyRqstJson)
 {
     const auto services = notifyRqstJson["NotifyInfo"]["NotifyServices"]
                               .get<std::vector<std::string>>();
@@ -49,19 +96,8 @@ sdbusplus::async::task<>
 
     for (const auto& service : services)
     {
-        try
-        {
-            co_await _extDataIfaces.systemDServiceAction(service,
-                                                         systemdMethod);
-        }
-        catch (const std::exception& e)
-        {
-            lg2::error(
-                "Notify request to {METHOD}:{SERVICE} failed; triggered as "
-                "path[{PATH}] updated. Error: {ERROR}",
-                "METHOD", systemdMethod, "SERVICE", service, "PATH",
-                modifiedPath, "ERROR", e.what());
-        }
+        // Will notify each service sequentially assuming they are dependent
+        co_await sendSystemDNotification(service, systemdMethod);
     }
     co_return;
 }
@@ -101,7 +137,7 @@ sdbusplus::async::task<> NotifyService::init(fs::path notifyFilePath)
     }
     else if ((notifyRqstJson["NotifyInfo"]["Mode"] == "Systemd"))
     {
-        co_await sendSystemDNotification(notifyRqstJson);
+        co_await systemDNotify(notifyRqstJson);
     }
     else
     {
