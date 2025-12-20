@@ -55,8 +55,10 @@ class ExternalDataIFaces
      * @param[in] service - The name of the service to be reloaded/restarted
      * @param[in] method - The method to trigger, can have either "RestartUnit"
      *                     or "ReloadUnit".
+     *
+     * @return bool - True on success, False on failure
      */
-    virtual sdbusplus::async::task<>
+    virtual sdbusplus::async::task<bool>
         systemDServiceAction(const std::string& service,
                              const std::string& systemdMethod) = 0;
 

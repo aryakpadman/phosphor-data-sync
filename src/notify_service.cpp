@@ -34,7 +34,6 @@ NotifyService::NotifyService(
     _ctx.spawn(init(notifyFilePath));
 }
 
-// NOLINTNEXTLINE
 sdbusplus::async::task<>
     NotifyService::sendSystemDNotification(const nlohmann::json& notifyRqstJson)
 {
@@ -51,6 +50,7 @@ sdbusplus::async::task<>
     {
         try
         {
+            // TODO : Use the return value for retry logic
             co_await _extDataIfaces.systemDServiceAction(service,
                                                          systemdMethod);
         }
@@ -60,7 +60,7 @@ sdbusplus::async::task<>
                 "Notify request to {METHOD}:{SERVICE} failed; triggered as "
                 "path[{PATH}] updated. Error: {ERROR}",
                 "METHOD", systemdMethod, "SERVICE", service, "PATH",
-                modifiedPath, "ERROR", e.what());
+                modifiedPath, "ERROR", e);
         }
     }
     co_return;
@@ -106,10 +106,10 @@ sdbusplus::async::task<> NotifyService::init(fs::path notifyFilePath)
     else
     {
         lg2::error(
-            "Failed to process the notify request[{PATH}], Request : {RQSTJSON}",
+            "Notify failed due to unknown Mode in notify request[{PATH}], "
+            "Request : {RQSTJSON}",
             "PATH", notifyFilePath, "RQSTJSON",
             nlohmann::to_string(notifyRqstJson));
-        co_return;
     }
 
     try

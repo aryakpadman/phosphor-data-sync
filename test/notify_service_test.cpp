@@ -34,10 +34,10 @@ TEST_F(NotifyServiceTest, TestSystemDReloadNotificationRqst)
 
     EXPECT_CALL(*mockExtDataIfaces,
                 systemDServiceAction("service1", "ReloadUnit"))
-        .WillOnce([]() -> sdbusplus::async::task<> { co_return; });
+        .WillOnce([]() -> sdbusplus::async::task<bool> { co_return true; });
     EXPECT_CALL(*mockExtDataIfaces,
                 systemDServiceAction("service2", "ReloadUnit"))
-        .WillOnce([]() -> sdbusplus::async::task<> { co_return; });
+        .WillOnce([]() -> sdbusplus::async::task<bool> { co_return true; });
 
     fs::path notifyRqstFileName = NOTIFY_SERVICES_DIR /
                                   fs::path{"dummyNotifyRqst.json"};
@@ -100,7 +100,7 @@ TEST_F(NotifyServiceTest, TestSystemDRestartNotificationRqst)
 
     EXPECT_CALL(*mockExtDataIfaces,
                 systemDServiceAction("Service1", "RestartUnit"))
-        .WillOnce([]() -> sdbusplus::async::task<> { co_return; });
+        .WillOnce([]() -> sdbusplus::async::task<bool> { co_return true; });
 
     fs::path notifyRqstFileName = NOTIFY_SERVICES_DIR /
                                   fs::path{"dummyNotifyRqst.json"};

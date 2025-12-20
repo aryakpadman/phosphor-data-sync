@@ -10,6 +10,22 @@
 namespace data_sync::ext_data
 {
 
+namespace object_path
+{
+constexpr auto systemd = "/org/freedesktop/systemd1";
+} // namespace object_path
+
+namespace interface
+{
+constexpr auto systemdMgr = "org.freedesktop.systemd1.Manager";
+constexpr auto systemdUnit = "org.freedesktop.systemd1.Unit";
+} // namespace interface
+
+namespace service
+{
+constexpr auto systemd = "org.freedesktop.systemd1";
+} // namespace service
+
 /**
  * @class ExternalDataIFacesImpl
  *
@@ -34,6 +50,26 @@ class ExternalDataIFacesImpl : public ExternalDataIFaces
     explicit ExternalDataIFacesImpl(sdbusplus::async::context& ctx);
 
     /**
+     * @brief Get the DBus Obj Path of the given systemd service
+     *
+     * @param[in] service - The name of the DBus servixe
+     *
+     * @return DBus object path of the service.
+     */
+    sdbusplus::async::task<sdbusplus::message::object_path>
+        getServiceObjPath(const std::string& service) const;
+
+    /**
+     * @brief Get the ActiveState value of the systemd service
+     *
+     * @param[in] service
+     *
+     * @return sdbusplus::async::task<std::string>
+     */
+    sdbusplus::async::task<std::string>
+        getServiceState(const std::string& service) const;
+
+    /**
      *  @brief API to initiate the systemd reload/restart to the given service.
      *         It will trigger either reload or restart depends on the
      *         given method.
@@ -41,8 +77,10 @@ class ExternalDataIFacesImpl : public ExternalDataIFaces
      * @param[in] service - The name of the service to be reloaded/restarted
      * @param[in] method - The method to trigger, can have either "RestartUnit"
      *                     or "ReloadUnit".
+     *
+     * @return bool - True on success, False on failure
      */
-    sdbusplus::async::task<>
+    sdbusplus::async::task<bool>
         systemDServiceAction(const std::string& service,
                              const std::string& systemdMethod) override;
 

@@ -41,13 +41,12 @@ class NotifyService
 
   private:
     /**
-     * @brief API to process the received notification request to all the
-     *        configured services if configured mode is systemd
+     * @brief API to parse the received notification request and to trigger
+     *        systemd reload/restart for all the services and wait until the
+     *        services reaches a terminal state (active / failed).
      *
      * @param[in] notifyRqstJson - The reference to the received notify request
      *                          in JSON format
-     *
-     * @return sdbusplus::async::task<>
      */
     sdbusplus::async::task<>
         sendSystemDNotification(const nlohmann::json& notifyRqstJson);
