@@ -133,10 +133,12 @@ sdbusplus::async::task<> Manager::processPendingNotifications()
     for (const auto& path : fs::directory_iterator(NOTIFY_SERVICES_DIR))
     {
         _notifyReqs.emplace_back(std::make_unique<notify::NotifyService>(
-            _ctx, *_extDataIfaces, path, [this](notify::NotifyService* ptr) {
+            _ctx, *_extDataIfaces, path,
+            [this](notify::NotifyService* ptr) {
             std::erase_if(_notifyReqs,
                           [ptr](const auto& p) { return p.get() == ptr; });
-        }));
+        }, DEFAULT_RETRY_ATTEMPTS,
+            std::chrono::seconds{DEFAULT_RETRY_INTERVAL}));
     }
 
     co_return;
@@ -171,7 +173,8 @@ sdbusplus::async::task<> Manager::monitorServiceNotifications()
                         std::erase_if(_notifyReqs, [ptr](const auto& p) {
                             return p.get() == ptr;
                         });
-                    }));
+                    }, DEFAULT_RETRY_ATTEMPTS,
+                            std::chrono::seconds{DEFAULT_RETRY_INTERVAL}));
                 }
             }
         }

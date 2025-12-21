@@ -14,6 +14,33 @@ namespace data_sync::notify
 namespace fs = std::filesystem;
 
 /**
+ * @brief The structure contains all retry-related details
+ *        if notification fails for a service
+ */
+struct Retry
+{
+    /**
+     * @brief The constructor
+     *
+     * @param[in] maxRetryAttempts - The number of retries
+     * @param[in] retryIntervalInSec - The interval in which retry will
+     *                                 occur.
+     */
+    Retry(uint8_t maxRetryAttempts,
+          const std::chrono::seconds& retryIntervalInSec);
+
+    /**
+     * @brief Number of retries.
+     */
+    uint8_t _maxRetryAttempts;
+
+    /**
+     * @brief Retry interval in seconds
+     */
+    std::chrono::seconds _retryIntervalInSec;
+};
+
+/**
  * @class NotifyService
  *
  * @brief The class which contains the APIs to process the sibling notification
@@ -32,12 +59,17 @@ class NotifyService
      * @param[in] extDataIfaces - The external data interface object to get
      *                            the external data
      * @param[in] notifyFilePath - The root path of the received notify request
+     * @param[in] maxRetryAttempts - The number of retries if notify fails
+     * @param[in] retryIntervalInSec - The interval in which retry happens
      * @param[in] cleanup - Callback function to remove the object from parent
      *                      container
      */
-    NotifyService(sdbusplus::async::context& ctx,
-                  data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
-                  const fs::path& notifyFilePath, CleanupCallback cleanup);
+    NotifyService(
+        sdbusplus::async::context& ctx,
+        data_sync::ext_data::ExternalDataIFaces& extDataIfaces,
+        const fs::path& notifyFilePath, CleanupCallback cleanup,
+        uint8_t maxRetryAttempts = 0,
+        std::chrono::seconds retryIntervalInSec = std::chrono::seconds{0});
 
   private:
     /**
@@ -45,11 +77,22 @@ class NotifyService
      *        systemd reload/restart for all the services and wait until the
      *        services reaches a terminal state (active / failed).
      *
-     * @param[in] notifyRqstJson - The reference to the received notify request
-     *                          in JSON format
+     * @param[in] service - The systemd service to reload/restart
+     * @param[in] systemdMethod - The action eed to perform on the service
      */
     sdbusplus::async::task<>
-        sendSystemDNotification(const nlohmann::json& notifyRqstJson);
+        sendSystemDNotification(const std::string& service,
+                                const std::string& systemdMethod);
+
+    /**
+     * @brief API to parse the received notification request and to trigger
+     *        systemd reload/restart for all the services
+     *
+     * @param[in] notifyRqstJson - The reference to the received notify request
+     *
+     */
+    sdbusplus::async::task<>
+        systemDNotify(const nlohmann::json& notifyRqstJson);
 
     /**
      * @brief The API to trigger the notification to the configured service upon
@@ -73,6 +116,12 @@ class NotifyService
      *        external dependent data.
      */
     data_sync::ext_data::ExternalDataIFaces& _extDataIfaces;
+
+    /**
+     * @brief The object containing retry related info
+     *
+     */
+    Retry _retryInfo;
 
     /**
      * @brief  Callback function invoked when notification processing
