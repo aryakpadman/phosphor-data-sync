@@ -4,43 +4,50 @@
             "Path": "/var/lib/phosphor-software-manager/hostfw/running/GUARD",
             "Description": "GUARD",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/running/DEVTREE",
             "Description": "Host CEC persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/nvram/PHYP-NVRAM",
             "Description": "PHYP persisted NVRAM data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/nvram/PHYP-NVRAM-CKSUM",
             "Description": "PHYP persisted NVRAM checksum data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/running/EECACHE",
             "Description": "Host owned persisted VPD data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/running/NVRAM",
             "Description": "Host OPAL persisted NVRAM data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-software-manager/hostfw/running/HBD_RW",
             "Description": "Hostboot persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         }
     ],
     "Directories": [
@@ -48,25 +55,36 @@
             "Path": "/var/lib/openpower-occ-control/",
             "Description": "BMC-OCC persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/op-hw-isolation/persistdata/",
             "Description": "Hardware isolation persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phal/",
             "Description": "PHAL persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/network/hypervisor/",
             "Description": "Hypervisor Network persisted configuration",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
+        },
+        {
+           "Path": "/var/lib/phosphor-logging/",
+            "Description": "phosphor-logging",
+            "SyncDirection": "Bidirectional",
+            "SyncType": "Immediate",
+            "ExcludeList": ["/var/lib/phosphor-logging/extensions/pels/pelID"]
         }
     ]
 }

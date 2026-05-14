@@ -4,15 +4,24 @@
             "Path": "/var/lib/ibm/bmcweb/RootCert",
             "Description": "Root certificate",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         }
     ],
     "Directories": [
         {
-            "Path": "/var/lib/bmcweb/ibm-management-console/configfiles/",
+            "Path": "/var/lib/pds/savearea/",
             "Description": "Host save area persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
+        },
+        {
+            "Path": "/var/lib/pds/otherapps/",
+            "Description": "Mockup data",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         }
     ]
 }

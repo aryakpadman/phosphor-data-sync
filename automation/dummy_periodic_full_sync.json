@@ -1,0 +1,55 @@
+{
+    "Files": [
+        {
+            "Path": "/var/data-sync-test/pds/a2p/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/a2p/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/p2a/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/p2a/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/bidir/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/bidir/periodic/file",
+            "Description": "A2P Periodic sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        }
+    ],
+    "Directories": [
+        {
+            "Path": "/var/data-sync-test/bidir/periodic/BMC0/",
+            "Description": "Host State Persisted data",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Periodic",
+            "Periodicity": "PT5M"
+        }
+    ]
+}

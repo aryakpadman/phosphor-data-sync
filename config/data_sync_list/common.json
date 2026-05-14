@@ -11,7 +11,8 @@
                 "/var/log/obmc-console1.bmc0.log",
                 "/var/log/obmc-console.bmc1.log",
                 "/var/log/obmc-console1.bmc1.log"
-            ]
+            ],
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-state-manager/",
@@ -23,27 +24,31 @@
                 "/var/lib/phosphor-state-manager/POHCounter",
                 "/var/lib/phosphor-state-manager/chassisStateChangeTime",
                 "/var/lib/phosphor-state-manager/redundant-bmc/data.json"
-            ]
+            ],
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-fan-presence/",
             "Description": "Fan presence persisted data",
             "SyncDirection": "Active2Passive",
             "SyncType": "Immediate",
-            "ExcludeList": ["/var/lib/phosphor-fan-presence/control/"]
+            "ExcludeList": ["/var/lib/phosphor-fan-presence/control/"],
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-post-code-manager/",
             "Description": "Host progress codes persisted data",
             "SyncDirection": "Active2Passive",
             "SyncType": "Periodic",
-            "Periodicity": "PT60S"
+            "Periodicity": "PT60S",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-led-manager/",
             "Description": "System LED persisted data",
             "SyncDirection": "Active2Passive",
-            "SyncType": "Immediate"
+            "SyncType": "Immediate",
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/phosphor-settings-manager/settings/",
@@ -57,14 +62,15 @@
                 "Mode": "Systemd",
                 "Method": "Restart",
                 "NotifyServices": ["xyz.openbmc_project.Settings.service"]
-            }
+            },
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
-            "Path": "/var/lib/phosphor-inventory-manager/",
+            "Path": "/var/lib/pds/phosphor-inventory-manager/",
             "Description": "System inventory persisted data (synced to backup dir on passive to avoid DBus exposure)",
             "SyncDirection": "Active2Passive",
             "SyncType": "Immediate",
-            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/"
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         },
         {
             "Path": "/var/lib/service-config-manager/",
@@ -75,7 +81,8 @@
                 "Mode": "Systemd",
                 "Method": "Reload",
                 "NotifyServices": ["srvcfg-manager.service"]
-            }
+            },
+            "DestinationPath": "/var/lib/phosphor-data-sync/bmc_data_bkp/perf_test/"
         }
     ]
 }

@@ -1,0 +1,48 @@
+{
+    "Files": [
+        {
+            "Path": "/var/data-sync-test/pds/a2p/immediate/file",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Immediate"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/a2p/immediate/file2",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Immediate"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/p2a/immediate/file",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Passive2Active",
+            "SyncType": "Immediate"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/p2a/immediate/file2",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Passive2Active",
+            "SyncType": "Immediate"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/bidir/immediate/file",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Bidirectional",
+            "SyncType": "Immediate"
+        },
+        {
+            "Path": "/var/data-sync-test/pds/bidir/immediate/file2",
+            "Description": "A2P Immediate sync",
+            "SyncDirection": "Bidirectional",
+            "SyncType": "Immediate"
+        }
+    ],
+    "Directories": [
+        {
+            "Path": "/var/data-sync-test/a2p/immediate/BMC0/",
+            "Description": "Host State Persisted data",
+            "SyncDirection": "Active2Passive",
+            "SyncType": "Immediate"
+        }
+    ]
+}

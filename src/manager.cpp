@@ -312,15 +312,33 @@ void Manager::getRsyncCmd(RsyncMode mode,
 {
     using namespace std::string_literals;
 
-    cmd.append("rsync --compress --recursive --perms --group --owner --times "
-               "--atimes --update"s);
+    if (!fs::exists("/tmp/pds/rsync_opts_sync") && !fs::exists("/tmp/pds/rsync_opts_notify"))
+    {
+        cmd.append("rsync --compress --recursive --perms --group --owner --times "
+              "--atimes --update"s);
+    }
+
     if (mode == RsyncMode::Sync)
     {
         // Appending required flags to sync data between BMCs
         // For more details about CLI options, refer rsync man page.
         // https://download.samba.org/pub/rsync/rsync.1#OPTION_SUMMARY
 
-        cmd.append(" --relative --delete --delete-missing-args --stats"s);
+        if (fs::exists("/tmp/pds/rsync_opts_sync"))
+        {
+            std::ifstream file("/tmp/pds/rsync_opts_sync");
+            if (file)
+            {
+                std::string rsyncCliOpts((std::istreambuf_iterator<char>(file)),
+                    std::istreambuf_iterator<char>());
+                rsyncCliOpts.pop_back();
+                cmd.append(rsyncCliOpts);
+            }
+        }
+        else
+        {
+            cmd.append(" --relative --delete --delete-missing-args --stats"s);
+        }
 
         if (dataSyncCfg._excludeList.has_value())
         {
@@ -329,8 +347,22 @@ void Manager::getRsyncCmd(RsyncMode mode,
     }
     else if (mode == RsyncMode::Notify)
     {
-        // Appending the required flags to notify the siblng
-        cmd.append(" --remove-source-files"s);
+        if(fs::exists("/tmp/pds/rsync_opts_notify"))
+        {
+           std::ifstream file("/tmp/pds/rsync_opts_notify");
+            if (file)
+            {
+                std::string rsyncCliOpts((std::istreambuf_iterator<char>(file)),
+                    std::istreambuf_iterator<char>());
+                rsyncCliOpts.pop_back();
+                cmd.append(rsyncCliOpts);
+            }
+        }
+        else
+        {
+            // Appending the required flags to notify the siblng
+            cmd.append(" --remove-source-files"s);
+        }
     }
 
     if (!srcPath.empty())
