@@ -53,10 +53,17 @@ endif
 
 # Build datasynctool executable
 if cli11_dep.found()
+    datasynctool_dependencies = [
+        cli11_dep,
+        sdbusplus_dep,
+        phosphor_dbus_interfaces_dep,
+        nlohmann_json_dep,
+    ]
+
     executable(
         'datasynctool',
         'datasynctool.cpp',
-        dependencies: [cli11_dep],
+        dependencies: datasynctool_dependencies,
         include_directories: inc_dir,
         install: true,
         install_dir: get_option('bindir'),
