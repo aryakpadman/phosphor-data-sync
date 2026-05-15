@@ -180,6 +180,54 @@ int displayStatus(bool jsonOutput)
     }
 }
 
+/**
+ * @brief Start a full synchronization
+ */
+int startFullSync()
+{
+    try
+    {
+        auto bus = sdbusplus::bus::new_default();
+        const std::string service = SyncBMCData::interface;
+        const std::string path = SyncBMCData::instance_path;
+        const std::string interface = SyncBMCData::interface;
+
+        auto method = bus.new_method_call(service.c_str(), path.c_str(),
+                                          interface.c_str(), "StartFullSync");
+
+        auto reply = bus.call(method);
+
+        std::println("Full sync initiated. See progress in journal logs");
+        return 0;
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        std::cerr << "Error starting full sync: " << e.what() << "\n";
+
+        // Provide more specific error messages for known error types
+        std::string errorName = e.name();
+        if (errorName.find("SyncDisabled") != std::string::npos)
+        {
+            std::cerr << "Sync is currently disabled\n";
+        }
+        else if (errorName.find("SiblingBMCNotAvailable") != std::string::npos)
+        {
+            std::cerr << "Sibling BMC is not available\n";
+        }
+        else if (errorName.find("FullSyncInProgress") != std::string::npos)
+        {
+            std::cerr << "Full sync is already in progress\n";
+        }
+
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Unexpected error: " << e.what() << "\n";
+        return 1;
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -195,6 +243,10 @@ int main(int argc, char* argv[])
     bool jsonOutput{false};
     app.add_flag("-j,--json", jsonOutput, "Display in JSON format");
 
+    // Add fullSync flag
+    bool fullSync{false};
+    app.add_flag("-f,--fullSync", fullSync, "Start a full synchronization");
+
     // Parse command line arguments
     try
     {
@@ -209,6 +261,12 @@ int main(int argc, char* argv[])
     if (showStatus)
     {
         return displayStatus(jsonOutput);
+    }
+
+    // Handle fullSync option
+    if (fullSync)
+    {
+        return startFullSync();
     }
 
     // Default behavior when no options are provided
