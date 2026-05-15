@@ -44,3 +44,23 @@ executable(
     install: true,
     install_dir: libexecdir_installdir,
 )
+
+# CLI11 dependency for datasynctool
+cli11_dep = dependency('CLI11', required: false)
+if not cli11_dep.found()
+    cli11_dep = dependency('cli11', required: false)
+endif
+
+# Build datasynctool executable
+if cli11_dep.found()
+    executable(
+        'datasynctool',
+        'datasynctool.cpp',
+        dependencies: [cli11_dep],
+        include_directories: inc_dir,
+        install: true,
+        install_dir: get_option('bindir'),
+    )
+else
+    warning('CLI11 not found, skipping datasynctool build')
+endif
