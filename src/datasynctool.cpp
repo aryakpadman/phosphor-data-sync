@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "config.h"
+
 #include <CLI/CLI.hpp>
 #include <nlohmann/json.hpp>
 #include <sdbusplus/bus.hpp>
 #include <xyz/openbmc_project/Control/SyncBMCData/common.hpp>
 
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <print>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace
 {
@@ -263,6 +268,125 @@ int setSyncEnabled(bool enable)
     }
 }
 
+/**
+ * @brief List all configured sync paths from JSON config files
+ */
+int listConfigPaths(bool jsonOutput)
+{
+    namespace fs = std::filesystem;
+
+    try
+    {
+        const fs::path configDir = DATA_SYNC_CONFIG_DIR;
+
+        if (!fs::exists(configDir) || !fs::is_directory(configDir))
+        {
+            std::cerr << "Config directory not found: " << configDir << "\n";
+            return 1;
+        }
+
+        std::vector<std::string> files;
+        std::vector<std::string> directories;
+
+        // Read all JSON files in the config directory
+        for (const auto& entry : fs::directory_iterator(configDir))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".json")
+            {
+                std::ifstream configFile(entry.path());
+                if (!configFile.is_open())
+                {
+                    std::cerr << "Failed to open: " << entry.path() << "\n";
+                    continue;
+                }
+
+                try
+                {
+                    json config = json::parse(configFile);
+
+                    // Extract Files
+                    if (config.contains("Files") && config["Files"].is_array())
+                    {
+                        for (const auto& fileEntry : config["Files"])
+                        {
+                            if (fileEntry.contains("Path"))
+                            {
+                                files.push_back(fileEntry["Path"].get<std::string>());
+                            }
+                        }
+                    }
+
+                    // Extract Directories
+                    if (config.contains("Directories") && config["Directories"].is_array())
+                    {
+                        for (const auto& dirEntry : config["Directories"])
+                        {
+                            if (dirEntry.contains("Path"))
+                            {
+                                directories.push_back(dirEntry["Path"].get<std::string>());
+                            }
+                        }
+                    }
+                }
+                catch (const json::exception& e)
+                {
+                    std::cerr << "JSON parse error in " << entry.path() << ": " << e.what() << "\n";
+                    continue;
+                }
+            }
+        }
+
+        // Output the results
+        if (jsonOutput)
+        {
+            json output;
+            output["Files"] = files;
+            output["Directories"] = directories;
+            std::println("{}", output.dump(4));
+        }
+        else
+        {
+            std::println();
+            std::println("Files:");
+            std::println("------");
+            if (files.empty())
+            {
+                std::println("  None");
+            }
+            else
+            {
+                for (const auto& file : files)
+                {
+                    std::println("  {}", file);
+                }
+            }
+
+            std::println();
+            std::println("Directories:");
+            std::println("------------");
+            if (directories.empty())
+            {
+                std::println("  None");
+            }
+            else
+            {
+                for (const auto& dir : directories)
+                {
+                    std::println("  {}", dir);
+                }
+            }
+            std::println();
+        }
+
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error listing config paths: " << e.what() << "\n";
+        return 1;
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -287,6 +411,11 @@ int main(int argc, char* argv[])
     bool disableSync{false};
     app.add_flag("-e,--enableSync", enableSync, "Enable sync");
     app.add_flag("-d,--disableSync", disableSync, "Disable sync");
+
+    // Add configPaths flag
+    bool showConfigPaths{false};
+    app.add_flag("-c,--configPaths", showConfigPaths,
+                 "List all configured paths for syncing");
 
     // Parse command line arguments
     try
@@ -320,6 +449,12 @@ int main(int argc, char* argv[])
     if (disableSync)
     {
         return setSyncEnabled(false);
+    }
+
+    // Handle configPaths option
+    if (showConfigPaths)
+    {
+        return listConfigPaths(jsonOutput);
     }
 
     // Default behavior when no options are provided

@@ -58,6 +58,7 @@ if cli11_dep.found()
         sdbusplus_dep,
         phosphor_dbus_interfaces_dep,
         nlohmann_json_dep,
+        conf_h_dep,
     ]
 
     executable(
