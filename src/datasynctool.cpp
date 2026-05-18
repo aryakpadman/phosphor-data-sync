@@ -228,6 +228,41 @@ int startFullSync()
     }
 }
 
+/**
+ * @brief Set the DisableSync property
+ */
+int setSyncEnabled(bool enable)
+{
+    try
+    {
+        auto bus = sdbusplus::bus::new_default();
+        const std::string service = SyncBMCData::interface;
+        const std::string path = SyncBMCData::instance_path;
+        const std::string interface = SyncBMCData::interface;
+
+        auto method = bus.new_method_call(service.c_str(), path.c_str(),
+                                          "org.freedesktop.DBus.Properties",
+                                          "Set");
+        method.append(interface, "DisableSync",
+                      std::variant<bool>(!enable));
+
+        auto reply = bus.call(method);
+
+        std::println("Sync {} successfully", enable ? "enabled" : "disabled");
+        return 0;
+    }
+    catch (const sdbusplus::exception_t& e)
+    {
+        std::cerr << "Error setting sync state: " << e.what() << "\n";
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Unexpected error: " << e.what() << "\n";
+        return 1;
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -246,6 +281,12 @@ int main(int argc, char* argv[])
     // Add fullSync flag
     bool fullSync{false};
     app.add_flag("-f,--fullSync", fullSync, "Start a full synchronization");
+
+    // Add enable/disable sync flags
+    bool enableSync{false};
+    bool disableSync{false};
+    app.add_flag("-e,--enableSync", enableSync, "Enable sync");
+    app.add_flag("-d,--disableSync", disableSync, "Disable sync");
 
     // Parse command line arguments
     try
@@ -267,6 +308,18 @@ int main(int argc, char* argv[])
     if (fullSync)
     {
         return startFullSync();
+    }
+
+    // Handle enableSync option
+    if (enableSync)
+    {
+        return setSyncEnabled(true);
+    }
+
+    // Handle disableSync option
+    if (disableSync)
+    {
+        return setSyncEnabled(false);
     }
 
     // Default behavior when no options are provided
