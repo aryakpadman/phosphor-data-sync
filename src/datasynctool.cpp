@@ -269,6 +269,168 @@ int setSyncEnabled(bool enable)
 }
 
 /**
+ * @brief Normalize a path by removing trailing slashes
+ * Treats /a/b/c and /a/b/c/ as equal
+ */
+std::string normalizePath(const std::string& path)
+{
+    if (path.empty() || path == "/")
+    {
+        return path;
+    }
+
+    // Remove trailing slashes
+    std::string normalized = path;
+    while (normalized.length() > 1 && normalized.back() == '/')
+    {
+        normalized.pop_back();
+    }
+
+    return normalized;
+}
+
+/**
+ * @brief Get configuration for a specific path
+ */
+int getPathConfig(const std::string& targetPath, bool jsonOutput)
+{
+    namespace fs = std::filesystem;
+
+    try
+    {
+        const fs::path configDir = DATA_SYNC_CONFIG_DIR;
+
+        if (!fs::exists(configDir) || !fs::is_directory(configDir))
+        {
+            std::cerr << "Config directory not found: " << configDir << "\n";
+            return 1;
+        }
+
+        std::string normalizedTarget = normalizePath(targetPath);
+        json foundConfig;
+        bool found = false;
+
+        // Read all JSON files in the config directory
+        for (const auto& entry : fs::directory_iterator(configDir))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".json")
+            {
+                std::ifstream configFile(entry.path());
+                if (!configFile.is_open())
+                {
+                    std::cerr << "Failed to open: " << entry.path() << "\n";
+                    continue;
+                }
+
+                try
+                {
+                    json config = json::parse(configFile);
+
+                    // Search in Files array
+                    if (config.contains("Files") && config["Files"].is_array())
+                    {
+                        for (const auto& fileEntry : config["Files"])
+                        {
+                            if (fileEntry.contains("Path"))
+                            {
+                                std::string configPath = fileEntry["Path"].get<std::string>();
+                                if (normalizePath(configPath) == normalizedTarget)
+                                {
+                                    foundConfig = fileEntry;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Search in Directories array if not found in Files
+                    if (!found && config.contains("Directories") &&
+                        config["Directories"].is_array())
+                    {
+                        for (const auto& dirEntry : config["Directories"])
+                        {
+                            if (dirEntry.contains("Path"))
+                            {
+                                std::string configPath = dirEntry["Path"].get<std::string>();
+                                if (normalizePath(configPath) == normalizedTarget)
+                                {
+                                    foundConfig = dirEntry;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (found)
+                    {
+                        break;
+                    }
+                }
+                catch (const json::exception& e)
+                {
+                    std::cerr << "JSON parse error in " << entry.path() << ": "
+                              << e.what() << "\n";
+                    continue;
+                }
+            }
+        }
+
+        if (!found)
+        {
+            std::cerr << "Error: Path '" << targetPath
+                      << "' not found in configuration\n";
+            return 1;
+        }
+
+        bool addedDefaultRetryInterval = false;
+
+        // Add default retry values if not present in config
+        if (!foundConfig.contains("RetryAttempts"))
+        {
+            foundConfig["RetryAttempts"] = DEFAULT_RETRY_ATTEMPTS;
+        }
+        if (!foundConfig.contains("RetryInterval"))
+        {
+            foundConfig["RetryInterval"] = DEFAULT_RETRY_INTERVAL;
+            addedDefaultRetryInterval = true;
+        }
+
+        // Output the configuration
+        if (jsonOutput)
+        {
+            std::println("{}", foundConfig.dump(4));
+        }
+        else
+        {
+            std::println();
+            for (const auto& [key, value] : foundConfig.items())
+            {
+                // for default RetryInterval - add "seconds" suffix
+                if (key == "RetryInterval" && addedDefaultRetryInterval &&
+                    value.is_number_integer())
+                {
+                    printParam(key, std::format("{} seconds", value.get<int>()));
+                }
+                else
+                {
+                    printJSONParam(key, value);
+                }
+            }
+            std::println();
+        }
+
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error getting path config: " << e.what() << "\n";
+        return 1;
+    }
+}
+
+/**
  * @brief List all configured sync paths from JSON config files
  */
 int listConfigPaths(bool jsonOutput)
@@ -417,6 +579,12 @@ int main(int argc, char* argv[])
     app.add_flag("-c,--configPaths", showConfigPaths,
                  "List all configured paths for syncing");
 
+    // Add getConf option
+    std::string getConfPath;
+    app.add_option("-g,--getConf", getConfPath,
+                   "Get data-sync configuration for a specific path (absolute path)")
+        ->check(CLI::ExistingPath);
+
     // Parse command line arguments
     try
     {
@@ -455,6 +623,12 @@ int main(int argc, char* argv[])
     if (showConfigPaths)
     {
         return listConfigPaths(jsonOutput);
+    }
+
+    // Handle getConf option
+    if (!getConfPath.empty())
+    {
+        return getPathConfig(getConfPath, jsonOutput);
     }
 
     // Default behavior when no options are provided
