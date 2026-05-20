@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "fullsync.hpp"
 #include "status.hpp"
 
 #include <CLI/CLI.hpp>
@@ -20,6 +21,10 @@ int main(int argc, char* argv[])
     bool jsonOutput{false};
     app.add_flag("-j,--json", jsonOutput, "Display in JSON format");
 
+    // Add fullSync flag
+    bool fullSync{false};
+    app.add_flag("-f,--fullSync", fullSync, "Start a full synchronization");
+
     // Parse command line arguments
     try
     {
@@ -34,6 +39,12 @@ int main(int argc, char* argv[])
     if (showStatus)
     {
         return datasynctool::status::displayStatus(jsonOutput);
+    }
+
+    // Handle fullSync option
+    if (fullSync)
+    {
+        return datasynctool::fullsync::startFullSync();
     }
 
     // Default behavior when no options are provided

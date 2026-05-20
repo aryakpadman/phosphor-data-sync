@@ -8,12 +8,18 @@ endif
 
 # Build datasynctool executable
 if cli11_dep.found()
-    datasynctool_sources = files('main.cpp', 'status.cpp', 'utils.cpp')
+    datasynctool_sources = files(
+        'fullsync.cpp',
+        'main.cpp',
+        'status.cpp',
+        'utils.cpp',
+    )
 
     datasynctool_dependencies = [
         cli11_dep,
         sdbusplus_dep,
         phosphor_dbus_interfaces_dep,
+        phosphor_logging_dep,
         nlohmann_json_dep,
     ]
 
