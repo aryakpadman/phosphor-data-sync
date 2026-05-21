@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "fullsync.hpp"
-#include "status.hpp"
+#include "sync_properties.hpp"
 
 #include <CLI/CLI.hpp>
 
@@ -25,6 +25,12 @@ int main(int argc, char* argv[])
     bool fullSync{false};
     app.add_flag("-f,--fullSync", fullSync, "Start a full synchronization");
 
+    // Add enable/disable sync flags
+    bool enableSync{false};
+    bool disableSync{false};
+    app.add_flag("-e,--enableSync", enableSync, "Enable sync");
+    app.add_flag("-d,--disableSync", disableSync, "Disable sync");
+
     // Parse command line arguments
     try
     {
@@ -38,13 +44,25 @@ int main(int argc, char* argv[])
     // Handle status option
     if (showStatus)
     {
-        return datasynctool::status::displayStatus(jsonOutput);
+        return datasynctool::sync_properties::displayStatus(jsonOutput);
     }
 
     // Handle fullSync option
     if (fullSync)
     {
         return datasynctool::fullsync::startFullSync();
+    }
+
+    // Handle enableSync option
+    if (enableSync)
+    {
+        return datasynctool::sync_properties::setSyncEnabled(true);
+    }
+
+    // Handle disableSync option
+    if (disableSync)
+    {
+        return datasynctool::sync_properties::setSyncEnabled(false);
     }
 
     // Default behavior when no options are provided

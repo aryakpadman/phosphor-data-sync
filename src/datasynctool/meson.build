@@ -11,7 +11,7 @@ if cli11_dep.found()
     datasynctool_sources = files(
         'fullsync.cpp',
         'main.cpp',
-        'status.cpp',
+        'sync_properties.cpp',
         'utils.cpp',
     )
 
