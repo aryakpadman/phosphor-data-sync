@@ -3,14 +3,25 @@
 #pragma once
 
 #include "data_sync_config.hpp"
+#include "data_watcher.hpp"
 #include "external_data_ifaces.hpp"
 #include "notify_service.hpp"
 #include "persistent.hpp"
 #include "sync_bmc_data_ifaces.hpp"
 
+#include <systemd/sd-event.h>
+
+#include <atomic>
 #include <filesystem>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <ranges>
 #include <vector>
+
+#include <sdbusplus/async/context.hpp>
+#include <sdbusplus/event.hpp>
 
 namespace data_sync
 {
@@ -143,6 +154,24 @@ class Manager
      * set.
      */
     void setSyncEventsHealth(const SyncEventsHealth& syncEventsHealth);
+
+    /**
+     * @brief Write all watched paths to a JSON file
+     *
+     * This method is called when SIGUSR1 signal is received. It collects all
+     * watched paths and writes them to /run/phosphor-data-sync/watching_paths.json
+     * using atomic write (temp file + rename).
+     */
+    void dumpWatchedPathsToFile() const;
+
+    /**
+     * @brief Register SIGUSR1 signal handler using signalfd
+     *
+     * Sets up signalfd to receive SIGUSR1 signals and registers it with the
+     * context's event loop. When SIGUSR1 is received, dumpWatchedPathsToFile()
+     * is called to write watched paths to a JSON file.
+     */
+    void registerSignalHandler();
 
   private:
     /**
@@ -294,6 +323,39 @@ class Manager
     static bool isRetryEligible(uint8_t errCode) noexcept;
 
     /**
+     * @brief Register a DataWatcher instance with the Manager
+     *
+     * This method is called when a DataWatcher is created to track it for
+     * debugging purposes (signal-triggered dump of watched paths).
+     *
+     * @param[in] configPath - The configured path being monitored
+     * @param[in] watcher - Pointer to the DataWatcher instance
+     */
+    void registerWatcher(const fs::path& configPath,
+                        watch::inotify::DataWatcher* watcher);
+
+    /**
+     * @brief Unregister a DataWatcher instance from the Manager
+     *
+     * This method is called when a DataWatcher is destroyed to remove it
+     * from tracking.
+     *
+     * @param[in] watcher - Pointer to the DataWatcher instance to remove
+     */
+    void unregisterWatcher(watch::inotify::DataWatcher* watcher);
+
+    /**
+     * @brief Collect all currently watched paths from all DataWatcher instances
+     *
+     * Iterates through all registered DataWatcher instances and collects their
+     * watched paths into a JSON structure.
+     *
+     * @returns nlohmann::json - JSON object with config_path → watched_paths
+     *          mapping and timestamp
+     */
+    nlohmann::json collectAllWatchedPaths() const;
+
+    /**
      * @brief The async context object used to perform operations asynchronously
      *        as required.
      */
@@ -325,6 +387,41 @@ class Manager
      *        completes.
      */
     std::vector<std::unique_ptr<notify::NotifyService>> _notifyReqs;
+
+    /**
+     * @brief Map of config paths to their active DataWatcher instances
+     *
+     * Key: Configured path from JSON (e.g., "/var/lib/network/hypervisor/")
+     * Value: Pointer to the DataWatcher monitoring that path
+     *
+     * Protected by _watchersMutex for thread-safe access.
+     */
+    std::map<fs::path, watch::inotify::DataWatcher*> _activeWatchers;
+
+    /**
+     * @brief Mutex to protect concurrent access to _activeWatchers map
+     *
+     * This mutex ensures thread-safe registration/unregistration of watchers
+     * and safe iteration during signal-triggered dumps.
+     */
+    mutable std::mutex _watchersMutex;
+
+    /**
+     * @brief Signal file descriptor for SIGUSR1
+     *
+     * File descriptor created by signalfd() to receive SIGUSR1 signals.
+     * Set to -1 if not initialized.
+     */
+    int _signalFd{-1};
+
+    /**
+     * @brief Event source for signal handling
+     *
+     * Holds the event source returned by event_t::add_io() for the signalfd.
+     * The source object manages the lifetime of the sd_event_source and will
+     * automatically unregister it when destroyed.
+     */
+    std::optional<sdbusplus::event::source> _signalSource;
 };
 
 } // namespace data_sync

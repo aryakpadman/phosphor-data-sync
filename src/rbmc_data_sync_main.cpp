@@ -49,6 +49,9 @@ int main()
         ctx, std::make_unique<data_sync::ext_data::ExternalDataIFacesImpl>(ctx),
         DATA_SYNC_CONFIG_DIR};
 
+    // Register SIGUSR1 signal handler
+    manager.registerSignalHandler();
+
     // clang-tidy currently mangles this into something unreadable
     // NOLINTNEXTLINE
     ctx.spawn([](sdbusplus::async::context& ctx) -> sdbusplus::async::task<> {

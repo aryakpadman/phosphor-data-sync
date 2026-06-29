@@ -10,12 +10,21 @@
 
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/lg2.hpp>
+#include <sdbusplus/async/context.hpp>
 
+#include <sys/signalfd.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <experimental/scope>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -741,6 +750,14 @@ sdbusplus::async::task<>
             _ctx, IN_NONBLOCK, eventMasksToWatch, dataSyncCfg._path,
             excludeList, dataSyncCfg._includeList);
 
+        // Register this watcher with the Manager
+        registerWatcher(dataSyncCfg._path, &dataWatcher);
+
+        // Ensure unregistration on scope exit
+        auto cleanup = std::experimental::scope_exit([this, &dataWatcher]() {
+            unregisterWatcher(&dataWatcher);
+        });
+
         while (!_ctx.stop_requested() && !_syncBMCDataIface.disable_sync())
         {
             // NOLINTNEXTLINE
@@ -920,6 +937,195 @@ sdbusplus::async::task<void> Manager::startFullSync()
     }
 
     co_return;
+}
+
+
+void Manager::registerWatcher(const fs::path& configPath,
+                              watch::inotify::DataWatcher* watcher)
+{
+    std::lock_guard<std::mutex> lock(_watchersMutex);
+    _activeWatchers[configPath] = watcher;
+    lg2::debug("Registered watcher for config path: {PATH}", "PATH",
+               configPath);
+}
+
+void Manager::unregisterWatcher(watch::inotify::DataWatcher* watcher)
+{
+    std::lock_guard<std::mutex> lock(_watchersMutex);
+
+    // Find and remove the watcher
+    for (auto it = _activeWatchers.begin(); it != _activeWatchers.end(); ++it)
+    {
+        if (it->second == watcher)
+        {
+            lg2::debug("Unregistered watcher for config path: {PATH}", "PATH",
+                       it->first);
+            _activeWatchers.erase(it);
+            return;
+        }
+    }
+}
+
+nlohmann::json Manager::collectAllWatchedPaths() const
+{
+    nlohmann::json result;
+    nlohmann::json watchingPaths;
+
+    std::lock_guard<std::mutex> lock(_watchersMutex);
+
+    lg2::debug("Collecting watched paths from {COUNT} active watchers", "COUNT",
+               _activeWatchers.size());
+
+    for (const auto& [configPath, watcher] : _activeWatchers)
+    {
+        std::vector<std::string> paths;
+
+        // Get all watched paths from this watcher's watch descriptors
+        for (const auto& [wd, path] : watcher->getWatchDescriptors())
+        {
+            paths.push_back(path.string());
+        }
+
+        lg2::debug("Config path {CONFIG} has {COUNT} watched paths", "CONFIG",
+                   configPath, "COUNT", paths.size());
+        watchingPaths[configPath.string()] = paths;
+    }
+
+    result["watching_paths"] = watchingPaths;
+
+    // Add timestamp in ISO 8601 UTC format
+    auto now = std::chrono::system_clock::now();
+    auto timeT = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&timeT), "%Y-%m-%dT%H:%M:%SZ");
+    result["timestamp"] = ss.str();
+
+    return result;
+}
+void Manager::registerSignalHandler()
+{
+    // Block SIGUSR1 so it's delivered via signalfd instead of default handler
+    sigset_t ss;
+    if (sigemptyset(&ss) < 0 || sigaddset(&ss, SIGUSR1) < 0)
+    {
+        lg2::error("Failed to setup signal mask for SIGUSR1");
+        return;
+    }
+
+    if (pthread_sigmask(SIG_BLOCK, &ss, nullptr) < 0)
+    {
+        lg2::error("Failed to block SIGUSR1 signal: {ERROR}", "ERROR",
+                   std::strerror(errno));
+        return;
+    }
+
+    // Create signalfd for SIGUSR1
+    _signalFd = signalfd(-1, &ss, SFD_NONBLOCK | SFD_CLOEXEC);
+    if (_signalFd < 0)
+    {
+        lg2::error("Failed to create signalfd: {ERROR}", "ERROR",
+                   std::strerror(errno));
+        return;
+    }
+
+    try
+    {
+        // Get context's event_loop using context_friend
+        auto& event_loop =
+            sdbusplus::async::details::context_friend::get_event_loop(_ctx);
+
+        // Add signalfd to event_loop using add_io()
+        // Store the source object to keep the event source alive
+        _signalSource = event_loop.add_io(
+            _signalFd, EPOLLIN,
+            [](sd_event_source*, int fd, uint32_t revents, void* userdata) -> int {
+                lg2::info("Signal handler callback invoked, revents={REVENTS}",
+                          "REVENTS", revents);
+
+                // Read signal info from signalfd
+                signalfd_siginfo si;
+                ssize_t s = read(fd, &si, sizeof(si));
+                if (s == sizeof(si))
+                {
+                    lg2::info(
+                        "SIGUSR1 received (signal {SIG}), dumping watched paths",
+                        "SIG", si.ssi_signo);
+
+                    auto* mgr = static_cast<Manager*>(userdata);
+                    mgr->dumpWatchedPathsToFile();
+                }
+                else if (s < 0)
+                {
+                    lg2::error("Failed to read from signalfd: {ERROR}", "ERROR",
+                               std::strerror(errno));
+                }
+                return 0;
+            },
+            this);
+
+        lg2::info(
+            "Successfully registered SIGUSR1 handler using signalfd (fd={FD})",
+            "FD", _signalFd);
+    }
+    catch (const std::exception& e)
+    {
+        lg2::error("Failed to register SIGUSR1 handler: {ERROR}", "ERROR",
+                   e.what());
+        close(_signalFd);
+        _signalFd = -1;
+    }
+}
+
+
+void Manager::dumpWatchedPathsToFile() const
+{
+    constexpr auto outputFile = "/run/phosphor-data-sync/watching_paths.json";
+
+    lg2::info("Starting dump of watched paths to {FILE}", "FILE", outputFile);
+
+    try
+    {
+        // Ensure directory exists
+        fs::path dirPath = fs::path(outputFile).parent_path();
+
+        if (!fs::exists(dirPath))
+        {
+            lg2::info("Creating directory: {DIR}", "DIR", dirPath.string());
+            fs::create_directories(dirPath);
+        }
+
+        // Collect all watched paths
+        lg2::debug("Collecting all watched paths...");
+        nlohmann::json output = collectAllWatchedPaths();
+        lg2::debug("Collected JSON size: {SIZE} bytes", "SIZE",
+                   output.dump().size());
+
+        // Write atomically using temp file + rename
+        std::string tempFile = std::string(outputFile) + ".tmp";
+        lg2::debug("Opening temp file: {FILE}", "FILE", tempFile);
+
+        std::ofstream file(tempFile);
+        if (!file.is_open())
+        {
+            lg2::error("Failed to open watched paths file for writing: {FILE}",
+                       "FILE", tempFile);
+            return;
+        }
+
+        lg2::debug("Writing JSON to temp file...");
+        file << output.dump(4); // Pretty print with 4-space indent
+        file.close();
+
+        fs::rename(tempFile, outputFile);
+
+        lg2::info("Successfully dumped watched paths to {FILE}", "FILE",
+                  outputFile);
+    }
+    catch (const std::exception& e)
+    {
+        lg2::error("Error writing watched paths file: {ERROR}", "ERROR",
+                   e.what());
+    }
 }
 
 } // namespace data_sync
