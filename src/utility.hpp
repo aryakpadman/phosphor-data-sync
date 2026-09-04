@@ -70,18 +70,17 @@ void setupPaths();
 namespace rsync
 {
 /**
- * @brief Extract the actual bytes of file data transferred
+ * @brief Determine whether rsync actually transferred or deleted data on
+ *        the remote.
  *
- * The function searches the provided rsync log string for the line
- * starting with "Literal data:" and captures its numeric
- * value.
+ * Checks the rsync output for two conditions:
+ *  - "Literal data:" value is non-zero  : data was written to the remote
+ *  - a "*deleting" itemize line present : files were deleted on the remote
  *
- * @param[in] rsyncOpStr - rsync output string containing the transfer
- *                         summary.
- * @return size_t - numeric value of the transferred size
- *                - Returns 0 if the value is not found
+ * @param[in] rsyncOutput - rsync output string containing transfer summary
+ * @return true if data was transferred or deleted, false otherwise
  */
-size_t getTransferredDataBytes(const std::string& rsyncOpStr);
+bool isSynced(const std::string& rsyncOutput);
 
 } // namespace rsync
 } // namespace data_sync::utility

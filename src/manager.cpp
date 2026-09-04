@@ -364,7 +364,8 @@ void Manager::getRsyncCmd(RsyncMode mode,
             // truth.
             cmd.append(" --update"s);
         }
-        cmd.append(" --relative --delete --delete-missing-args --stats"s);
+        cmd.append(
+            " --itemize-changes --relative --delete --delete-missing-args --stats"s);
 
         if (dataSyncCfg._excludeList.has_value())
         {
@@ -583,16 +584,11 @@ sdbusplus::async::task<bool>
     {
         case 0: // Success
         {
-            // Notify only if configured, we know the concrete path,
-            // and bytes > 0
+            // Notify only if configured and rsync actually modified the data at
+            // remote (i.e, data transferred or files deleted).
             if (dataSyncCfg._notifySibling &&
-                utility::rsync::getTransferredDataBytes(result.second) != 0)
+                utility::rsync::isSynced(result.second))
             {
-                // Rsync success alone doesn’t guarantee data got updated on the
-                // remote.
-                // Checking bytes transferred helps to confirm if any data
-                // mismatch was actually synced.
-                // initiate sibling notification
                 // NOLINTNEXTLINE
                 co_await triggerSiblingNotification(dataSyncCfg,
                                                     currentSrcPath.string());

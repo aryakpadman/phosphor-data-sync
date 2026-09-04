@@ -98,17 +98,14 @@ void setupPaths()
 namespace rsync
 {
 
-size_t getTransferredDataBytes(const std::string& rsyncOpStr)
+bool isSynced(const std::string& rsyncOutput)
 {
-    // Regex to capture the numeric value of "Literal data:"
-    std::regex re(R"(Literal data:\s*([0-9]+(?:\.[0-9]+)?\s*\w+))");
-    std::smatch match;
-
-    if (std::regex_search(rsyncOpStr, match, re))
-    {
-        return static_cast<size_t>(std::stod(match[1].str()));
-    }
-    return 0;
+    // Match either:
+    //   - "Literal data:" with a non-zero value (data written to remote)
+    //   - "*deleting " line (file deleted on remote, via --itemize-changes)
+    std::regex re(R"(Literal data:\s*[1-9]|\*deleting\s+)");
+    return std::regex_search(rsyncOutput, re);
 }
+
 } // namespace rsync
 } // namespace data_sync::utility
