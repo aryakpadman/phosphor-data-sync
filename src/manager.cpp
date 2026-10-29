@@ -842,7 +842,8 @@ watch::inotify::DataWatcher*
         dataSyncCfg._path,
         std::make_unique<watch::inotify::DataWatcher>(
             _ctx, IN_NONBLOCK | IN_CLOEXEC, eventMasksToWatch,
-            dataSyncCfg._path, excludeList, dataSyncCfg._includeList));
+            dataSyncCfg._path, excludeList, dataSyncCfg._includeList,
+            [this]() { return _syncBMCDataIface.disable_sync(); }));
 
     return it->second.get();
 }

@@ -16,13 +16,15 @@ DataWatcher::DataWatcher(
     sdbusplus::async::context& ctx, const int inotifyFlags,
     const uint32_t eventMasksToWatch, fs::path dataPathToWatch,
     std::optional<std::unordered_set<fs::path>> excludeList,
-    std::optional<std::unordered_set<fs::path>> includeList) :
+    std::optional<std::unordered_set<fs::path>> includeList,
+    std::optional<std::function<bool()>> skipEventsCallback) :
     _inotifyFlags(inotifyFlags), _eventMasksToWatch(eventMasksToWatch),
     _dataPathToWatch(std::move(dataPathToWatch)),
     _excludeList(std::move(excludeList)), _includeList(std::move(includeList)),
     _inotifyFileDescriptor(inotifyInit()),
-    _fdioInstance(
-        std::make_unique<sdbusplus::async::fdio>(ctx, _inotifyFileDescriptor()))
+    _fdioInstance(std::make_unique<sdbusplus::async::fdio>(
+        ctx, _inotifyFileDescriptor())),
+    _skipEventsCallback(std::move(skipEventsCallback))
 {
     createWatchers(_dataPathToWatch);
 }
@@ -394,6 +396,12 @@ sdbusplus::async::task<DataOperations> DataWatcher::onDataChange()
 
     if (auto receivedEvents = readEvents(); receivedEvents.has_value())
     {
+        if (_skipEventsCallback.has_value() && _skipEventsCallback.value()())
+        {
+            // events will not be processed
+            // since it needs to be skipped
+            co_return _dataOperations;
+        }
         processEvents(receivedEvents.value());
     }
 
