@@ -6,9 +6,9 @@
 
 #include <phosphor-logging/lg2.hpp>
 #include <sdbusplus/bus.hpp>
+#include <xyz/openbmc_project/BmcPairing/BmcPairing/client.hpp>
 #include <xyz/openbmc_project/Control/SyncBMCData/client.hpp>
 #include <xyz/openbmc_project/Control/SyncBMCData/common.hpp>
-#include <xyz/openbmc_project/Provisioning/Provisioning/client.hpp>
 #include <xyz/openbmc_project/State/BMC/Redundancy/client.hpp>
 
 #include <iostream>
@@ -55,8 +55,8 @@ sdbusplus::async::task<> displayStatus(sdbusplus::async::context& ctx,
             sdbusplus::client::xyz::openbmc_project::control::SyncBMCData<>;
         using RedundancyMgr =
             sdbusplus::client::xyz::openbmc_project::state::bmc::Redundancy<>;
-        using ProvisioningMgr = sdbusplus::client::xyz::openbmc_project::
-            provisioning::Provisioning<>;
+        using PairingMgr =
+            sdbusplus::client::xyz::openbmc_project::bmc_pairing::BmcPairing<>;
 
         json statusData;
 
@@ -85,15 +85,13 @@ sdbusplus::async::task<> displayStatus(sdbusplus::async::context& ctx,
 
         try
         {
-            auto peerConnected =
-                co_await ProvisioningMgr(ctx)
-                    .service("xyz.openbmc_project.Provisioning")
-                    .path("/xyz/openbmc_project/Provisioning")
-                    .peer_connected();
+            auto peerConnected = co_await PairingMgr(ctx)
+                                     .service("xyz.openbmc_project.BmcPairing")
+                                     .path(PairingMgr::instance_path)
+                                     .peer_connected();
 
             statusData["Peer Connected"] = utils::extractEnumValue(
-                ProvisioningMgr::convertPeerConnectionStatusToString(
-                    peerConnected));
+                PairingMgr::convertPeerConnectionStatusToString(peerConnected));
         }
         catch (const std::exception&)
         {}
